@@ -1,0 +1,2129 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zongoratanuló</title>
+<meta name="description" content="Egyszerű zongoratanuló alkalmazás kezdőknek: kotta, kivilágított billentyűk, metronóm.">
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161b" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Zongora">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e4fa8'/%3E%3Cg fill='%23fff'%3E%3Crect x='10' y='14' width='13' height='36' rx='2'/%3E%3Crect x='25.5' y='14' width='13' height='36' rx='2'/%3E%3Crect x='41' y='14' width='13' height='36' rx='2'/%3E%3C/g%3E%3Cg fill='%2314161b'%3E%3Crect x='19' y='14' width='8' height='21' rx='1.5'/%3E%3Crect x='35' y='14' width='8' height='21' rx='1.5'/%3E%3C/g%3E%3C/svg%3E">
+
+<!-- ===================================================================
+     DALOK — új dal felvételéhez csak ezt az objektumot kell bővíteni.
+
+     Hangjelölés: tudományos hangmagasság-jelölés angol betűkkel,
+       C4 = középső C. Módosítás: "#" = kereszt (F#4 = Fisz), "b" = bé
+       (Bb3 = B, Eb4 = Esz). A felületen magyar nevek jelennek meg (B → H).
+     Hang a dallamban:  HANG[:HOSSZ][@UJJ]   pl. "E4", "D4:8", "G3:h@1"
+     Hossz: w = egész, h. = pontozott fél, h = fél, q. = pontozott negyed,
+       q = negyed (alapértelmezés), 8 = nyolcad.
+     Ujjszám: ha nincs megadva a hangnál, a dal `fingers` táblájából jön.
+     Akkordmód ütemei: "Fism" = egész ütem, "G:h C:h" = két fél ütem.
+     Minden ütem hosszát induláskor ellenőrizzük (lásd validateSong).
+     =================================================================== -->
+<script id="songs">
+const SONGS = [
+  {
+    id: "orom",
+    title: "Örömóda",
+    composer: "L. van Beethoven",
+    level: 1,
+    meter: [4, 4],
+    summary: "C-pozíció · dallam + bal kéz",
+    fingers: {
+      right: { G3: 1, C4: 1, D4: 2, E4: 3, F4: 4, G4: 5 },
+      left: { C3: 5, G3: 1 },
+    },
+    modes: {
+      melody: {
+        right: [
+          "E4 E4 F4 G4", "G4 F4 E4 D4", "C4 C4 D4 E4", "E4:q. D4:8 D4:h",
+          "E4 E4 F4 G4", "G4 F4 E4 D4", "C4 C4 D4 E4", "D4:q. C4:8 C4:h",
+          "D4 D4 E4 C4", "D4 E4:8 F4:8 E4 C4", "D4 E4:8 F4:8 E4 D4", "C4 D4 G3:h",
+          "E4 E4 F4 G4", "G4 F4 E4 D4", "C4 C4 D4 E4", "D4:q. C4:8 C4:h",
+        ],
+        left: [
+          "C3:w", "G3:w", "C3:w", "G3:w",
+          "C3:w", "G3:w", "C3:w", "G3:h C3:h",
+          "G3:w", "C3:w", "G3:w", "G3:w",
+          "C3:w", "G3:w", "C3:w", "G3:h C3:h",
+        ],
+      },
+      // A bal kéz alaphangjaiból képzett kísérő akkordok (C és G).
+      chords: {
+        harmony: {
+          C: { name: "C-dúr", right: ["C4", "E4", "G4"], fingers: [1, 3, 5], bass: "C3" },
+          G: { name: "G-dúr", right: ["B3", "D4", "G4"], fingers: [1, 2, 5], bass: "G3" },
+        },
+        rhythm: "slot",
+        bars: [
+          "C", "G", "C", "G", "C", "G", "C", "G:h C:h",
+          "G", "C", "G", "G", "C", "G", "C", "G:h C:h",
+        ],
+      },
+    },
+  },
+  {
+    id: "river",
+    title: "River Flows in You",
+    composer: "Yiruma",
+    level: 2,
+    meter: [4, 4],
+    summary: "Akkordkör · Fisz-moll – D – A – E",
+    copyrightNote: "A dallamot easy piano kottából tanuld (pl. Musicnotes, Sheet Music Direct).",
+    modes: {
+      chords: {
+        // Szűk fekvésű akkordok: a jobb kéz alig mozdul (középső C körül).
+        harmony: {
+          Fism: { name: "Fisz-moll", right: ["C#4", "F#4", "A4"], fingers: [1, 3, 5], bass: "F#3" },
+          D: { name: "D-dúr", right: ["D4", "F#4", "A4"], fingers: [1, 3, 5], bass: "D3" },
+          A: { name: "A-dúr", right: ["C#4", "E4", "A4"], fingers: [1, 2, 5], bass: "A3" },
+          E: { name: "E-dúr", right: ["B3", "E4", "G#4"], fingers: [1, 3, 5], bass: "E3" },
+        },
+        rhythm: "slot",
+        loop: true,
+        arpeggio: { label: "Felbontva", order: [0, 1, 2, 1], unit: "8" },
+        bars: ["Fism", "D", "A", "E"],
+      },
+    },
+  },
+  {
+    id: "pirates",
+    title: "A Karib-tenger kalózai",
+    composer: "Klaus Badelt",
+    level: 3,
+    meter: [3, 4],
+    summary: "Akkordok · 3/4 lüktetés",
+    copyrightNote: "A dallamot easy piano kottából tanuld (pl. Musicnotes, Sheet Music Direct).",
+    modes: {
+      chords: {
+        harmony: {
+          Dm: { name: "D-moll", right: ["D4", "F4", "A4"], fingers: [1, 3, 5], bass: "D3" },
+          Bb: { name: "B-dúr", right: ["D4", "F4", "Bb4"], fingers: [1, 2, 5], bass: "Bb3" },
+          Am: { name: "A-moll", right: ["C4", "E4", "A4"], fingers: [1, 2, 5], bass: "A3" },
+          F: { name: "F-dúr", right: ["C4", "F4", "A4"], fingers: [1, 3, 5], bass: "F3" },
+          C: { name: "C-dúr", right: ["C4", "E4", "G4"], fingers: [1, 3, 5], bass: "C3" },
+          Gm: { name: "G-moll", right: ["D4", "G4", "Bb4"], fingers: [1, 3, 5], bass: "G3" },
+          A: { name: "A-dúr", right: ["C#4", "E4", "A4"], fingers: [1, 2, 5], bass: "A3" },
+        },
+        rhythm: "q",        // az akkord negyedenként ismétlődik (3× ütemenként)
+        accentFirst: true,  // hangsúly az ütem első akkordján
+        bars: [
+          "Dm", "Bb", "Am", "Dm", "Bb", "F", "C", "Dm",
+          "Dm", "Gm", "Bb", "Dm", "Bb", "Dm", "A",
+        ],
+      },
+    },
+  },
+];
+</script>
+
+<!-- ===================================================================
+     MAG — tiszta, DOM-mentes logika (hangok, idővonal, gyakorlás).
+     A tests/core.test.mjs Node alatt közvetlenül futtatja.
+     =================================================================== -->
+<script id="core">
+(function (global) {
+  "use strict";
+
+  const HANDS = ["right", "left"];
+  const EPS = 1e-6;
+  const LETTER_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const LETTER_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+  const HU_LETTER = { C: "C", D: "D", E: "E", F: "F", G: "G", A: "A", B: "H" };
+  const HU_FLAT = { C: "Cesz", D: "Desz", E: "Esz", F: "Fesz", G: "Gesz", A: "Asz", B: "B" };
+  const KEY_NAMES = ["C", "Cisz", "D", "Disz", "E", "F", "Fisz", "G", "Gisz", "A", "B", "H"];
+  const BLACK_PCS = [1, 3, 6, 8, 10];
+  const DURATIONS = { w: 4, "h.": 3, h: 2, "q.": 1.5, q: 1, "8.": 0.75, "8": 0.5, "16": 0.25 };
+  const MODE_LABELS = { melody: "Dallam", chords: "Akkordok" };
+  const HAND_LABELS = { right: "Jobb kéz", left: "Bal kéz", both: "Mindkét kéz" };
+
+  const pc = (midi) => ((midi % 12) + 12) % 12;
+  const isBlack = (midi) => BLACK_PCS.includes(pc(midi));
+  const keyName = (midi) => KEY_NAMES[pc(midi)];
+  const beatsPerBar = (meter) => (meter[0] * 4) / meter[1];
+
+  function huName(letter, alter) {
+    if (alter === 1) return HU_LETTER[letter] + "isz";
+    if (alter === -1) return HU_FLAT[letter];
+    return HU_LETTER[letter];
+  }
+
+  function parsePitch(str) {
+    const m = /^([A-G])(#|b)?(\d)$/.exec(str);
+    if (!m) throw new Error(`Ismeretlen hang: "${str}"`);
+    const letter = m[1];
+    const alter = m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0;
+    const octave = Number(m[3]);
+    return Object.freeze({
+      spelling: str,
+      letter,
+      alter,
+      octave,
+      midi: 12 * (octave + 1) + LETTER_SEMITONE[letter] + alter,
+      diatonic: octave * 7 + LETTER_INDEX[letter],
+      name: huName(letter, alter),
+    });
+  }
+
+  function parseDuration(code) {
+    if (code == null || code === "") return 1;
+    const v = DURATIONS[code];
+    if (v == null) throw new Error(`Ismeretlen hosszjelölés: "${code}"`);
+    return v;
+  }
+
+  const TOKEN_RE = /^([A-G](?:#|b)?\d)(?::([^@\s]+))?(?:@([1-5]))?$/;
+  function parseToken(token) {
+    const m = TOKEN_RE.exec(token);
+    if (!m) throw new Error(`Hibás hangjel: "${token}"`);
+    return { pitch: parsePitch(m[1]), dur: parseDuration(m[2]), finger: m[3] ? Number(m[3]) : null };
+  }
+
+  const splitBar = (bar) => bar.trim().split(/\s+/).filter(Boolean);
+  const handHu = (hand) => (hand === "right" ? "jobb" : "bal");
+
+  function fingerFor(song, hand, pitch, explicit) {
+    if (explicit != null) return explicit;
+    const map = song.fingers && song.fingers[hand];
+    return map && map[pitch.spelling] != null ? map[pitch.spelling] : null;
+  }
+
+  function makeEvent(hand, pitch, start, dur, bar, finger, extra) {
+    return Object.assign(
+      { hand, midi: pitch.midi, pitch, name: pitch.name, start, dur, bar, finger, accent: false, chord: null },
+      extra
+    );
+  }
+
+  function assertBarLength(song, label, barIndex, length, bpb) {
+    if (Math.abs(length - bpb) > EPS) {
+      throw new Error(`${song.title}: ${label} ${barIndex + 1}. ütem ${length} negyed hosszú, ${bpb} kellene.`);
+    }
+  }
+
+  function melodyEvents(song, def) {
+    const bpb = beatsPerBar(song.meter);
+    const events = [];
+    let barCount = 0;
+    for (const hand of HANDS) {
+      const bars = def[hand];
+      if (!bars) continue;
+      barCount = Math.max(barCount, bars.length);
+      bars.forEach((bar, i) => {
+        let t = 0;
+        for (const tok of splitBar(bar)) {
+          const { pitch, dur, finger } = parseToken(tok);
+          events.push(makeEvent(hand, pitch, i * bpb + t, dur, i, fingerFor(song, hand, pitch, finger)));
+          t += dur;
+        }
+        assertBarLength(song, `${handHu(hand)} kéz`, i, t, bpb);
+      });
+    }
+    return { events, chordSlots: [], barCount };
+  }
+
+  function chordEvents(song, def, arpeggio) {
+    const bpb = beatsPerBar(song.meter);
+    const events = [];
+    const chordSlots = [];
+    def.bars.forEach((bar, i) => {
+      let t = 0;
+      for (const tok of splitBar(bar)) {
+        const [id, durCode] = tok.split(":");
+        const chord = def.harmony[id];
+        if (!chord) throw new Error(`${song.title}: ismeretlen akkord "${id}" (${i + 1}. ütem).`);
+        const dur = durCode ? parseDuration(durCode) : bpb - t;
+        const start = i * bpb + t;
+        const notes = chord.right.map(parsePitch);
+        const fingers = chord.fingers || [];
+        const fingerAt = (j) => (fingers[j] != null ? fingers[j] : null);
+        chordSlots.push({ bar: i, start, dur, id, name: chord.name, notes: notes.map((p) => p.name) });
+
+        if (arpeggio && def.arpeggio) {
+          const unit = parseDuration(def.arpeggio.unit);
+          const order = def.arpeggio.order;
+          for (let at = 0, k = 0; at < dur - EPS; at += unit, k++) {
+            const j = order[k % order.length];
+            events.push(makeEvent("right", notes[j], start + at, Math.min(unit, dur - at), i, fingerAt(j), { chord: id }));
+          }
+        } else {
+          const step = !def.rhythm || def.rhythm === "slot" ? dur : parseDuration(def.rhythm);
+          for (let at = 0, k = 0; at < dur - EPS; at += step, k++) {
+            const accent = !!def.accentFirst && k === 0;
+            notes.forEach((p, j) =>
+              events.push(makeEvent("right", p, start + at, Math.min(step, dur - at), i, fingerAt(j), { chord: id, accent }))
+            );
+          }
+        }
+
+        const bass = parsePitch(chord.bass);
+        const bassFinger = chord.bassFinger != null ? chord.bassFinger : fingerFor(song, "left", bass, null);
+        events.push(makeEvent("left", bass, start, dur, i, bassFinger != null ? bassFinger : 5, { chord: id }));
+        t += dur;
+      }
+      assertBarLength(song, "akkord", i, t, bpb);
+    });
+    return { events, chordSlots, barCount: def.bars.length };
+  }
+
+  const availableModes = (song) => ["melody", "chords"].filter((m) => song.modes[m]);
+  const hasArpeggio = (song, mode) => !!(song.modes[mode] && song.modes[mode].arpeggio);
+
+  /**
+   * A dal kiválasztott módjából és kezéből lépéssorozatot készít.
+   * Lépés = az aktív kezek egy időpontban induló hangjai (ezeket kell leütni).
+   */
+  function buildTimeline(song, { mode, hands = "both", arpeggio = false }) {
+    const def = song.modes[mode];
+    if (!def) throw new Error(`${song.title}: nincs "${mode}" mód.`);
+    const raw = mode === "melody" ? melodyEvents(song, def) : chordEvents(song, def, arpeggio);
+    const active = hands === "both" ? HANDS : [hands];
+    const handOrder = (h) => HANDS.indexOf(h);
+    const events = raw.events
+      .filter((e) => active.includes(e.hand))
+      .sort((a, b) => a.start - b.start || handOrder(a.hand) - handOrder(b.hand) || b.midi - a.midi);
+    const bpb = beatsPerBar(song.meter);
+
+    const steps = [];
+    for (const e of events) {
+      let last = steps[steps.length - 1];
+      if (!last || Math.abs(last.start - e.start) > EPS) {
+        last = { index: steps.length, start: e.start, bar: e.bar, notes: [], accent: false, chord: null, dur: 0 };
+        steps.push(last);
+      }
+      last.notes.push(e);
+      if (e.accent) last.accent = true;
+    }
+    steps.forEach((s, i) => {
+      const barEnd = (s.bar + 1) * bpb;
+      const next = steps[i + 1];
+      s.dur = Math.min(next ? next.start : barEnd, barEnd) - s.start;
+      const slot = raw.chordSlots.find((c) => s.start >= c.start - EPS && s.start < c.start + c.dur - EPS);
+      s.chord = slot || null;
+    });
+
+    const bars = Array.from({ length: raw.barCount }, (_, i) => ({ index: i, start: i * bpb, steps: [] }));
+    steps.forEach((s) => bars[s.bar].steps.push(s.index));
+
+    return {
+      songId: song.id, mode, hands, arpeggio: !!(arpeggio && def.arpeggio),
+      meter: song.meter, bpb, barCount: raw.barCount, totalBeats: raw.barCount * bpb,
+      steps, bars, chordSlots: raw.chordSlots, events, loop: !!def.loop,
+    };
+  }
+
+  /** A dal összes hangját lefedő billentyűtartomány, legalább C3–H4 (2 oktáv). */
+  function keyboardRange(song) {
+    let low = 48, high = 71;
+    for (const mode of availableModes(song)) {
+      const variants = hasArpeggio(song, mode) ? [false, true] : [false];
+      for (const arpeggio of variants) {
+        for (const e of buildTimeline(song, { mode, hands: "both", arpeggio }).events) {
+          low = Math.min(low, e.midi - pc(e.midi));
+          high = Math.max(high, e.midi + (11 - pc(e.midi)));
+        }
+      }
+    }
+    return { low, high };
+  }
+
+  function songBarCount(song) {
+    return Math.max(...availableModes(song).map((mode) => buildTimeline(song, { mode }).barCount));
+  }
+
+  /** Hibaüzenetek listája; üres lista = a dal adatai rendben vannak. */
+  function validateSong(song) {
+    const errors = [];
+    if (!song.id || !song.title) errors.push("Hiányzó id vagy cím.");
+    if (!Array.isArray(song.meter) || song.meter.length !== 2) errors.push(`${song.title}: hibás ütemmutató.`);
+    if (!song.modes || availableModes(song).length === 0) errors.push(`${song.title}: nincs mód megadva.`);
+    if (errors.length) return errors;
+    for (const mode of availableModes(song)) {
+      for (const arpeggio of hasArpeggio(song, mode) ? [false, true] : [false]) {
+        try {
+          buildTimeline(song, { mode, hands: "both", arpeggio });
+        } catch (err) {
+          errors.push(err.message);
+        }
+      }
+    }
+    return errors;
+  }
+
+  const requiredMidis = (step) => [...new Set(step.notes.map((n) => n.midi))];
+
+  /* ---------- Gyakorlás: determinisztikus állapotgép ---------- */
+
+  function sessionInit(stepIndex = 0) {
+    return { stepIndex, satisfied: [], stepDone: false, barErrors: 0, barPlayed: 0, finished: false, cleanBars: [], errors: 0 };
+  }
+
+  function advance(s, tl, effects) {
+    const step = tl.steps[s.stepIndex];
+    const nextIndex = s.stepIndex + 1;
+    const next = tl.steps[nextIndex];
+    if (!next || next.bar !== step.bar) {
+      const clean = s.barErrors === 0 && s.barPlayed === tl.bars[step.bar].steps.length;
+      if (clean) {
+        s.cleanBars = [...s.cleanBars, step.bar];
+        effects.push({ type: "barClean", bar: step.bar });
+      }
+      s.barErrors = 0;
+      s.barPlayed = 0;
+    }
+    if (!next) {
+      s.finished = true;
+      effects.push({ type: "finished" });
+      return s;
+    }
+    s.stepIndex = nextIndex;
+    s.satisfied = [];
+    s.stepDone = false;
+    return s;
+  }
+
+  /**
+   * (állapot, akció) → { session, effects }. Az akciók:
+   *   { type: "key", midi }  — a felhasználó leütött egy billentyűt
+   *   { type: "next" }       — továbblépés gombbal
+   * opts.autoAdvance: gyakorló módban a helyes billentyű után magától lép.
+   * Hibás billentyű csak jelzés: nem lép vissza, nem büntet.
+   */
+  function sessionReduce(session, action, tl, opts = {}) {
+    const effects = [];
+    if (session.finished || !tl.steps.length) return { session, effects };
+    const s = Object.assign({}, session);
+    const step = tl.steps[s.stepIndex];
+
+    if (action.type === "next") {
+      return { session: advance(s, tl, effects), effects };
+    }
+    if (action.type === "key") {
+      const required = requiredMidis(step);
+      if (required.includes(action.midi)) {
+        if (s.satisfied.includes(action.midi)) return { session, effects };
+        s.satisfied = [...s.satisfied, action.midi];
+        effects.push({ type: "ok", midi: action.midi });
+        if (!s.stepDone && s.satisfied.length === required.length) {
+          s.stepDone = true;
+          s.barPlayed += 1;
+          effects.push({ type: "stepDone" });
+          if (opts.autoAdvance) advance(s, tl, effects);
+        }
+      } else {
+        effects.push({ type: "wrong", midi: action.midi });
+        if (!s.stepDone) {
+          s.barErrors += 1;
+          s.errors += 1;
+        }
+      }
+      return { session: s, effects };
+    }
+    return { session, effects };
+  }
+
+  /* ---------- Magyar szövegsegédek ---------- */
+
+  /** Melléknévképző rag számhoz: 60 → "60-as", 70 → "70-es", 65 → "65-ös". */
+  function numberAdjective(n) {
+    const ones = { 1: "es", 2: "es", 3: "as", 4: "es", 5: "ös", 6: "os", 7: "es", 8: "as", 9: "es" };
+    const tens = { 1: "es", 2: "as", 3: "as", 4: "es", 5: "es", 6: "as", 7: "es", 8: "as", 9: "es" };
+    let suffix;
+    if (n % 10 !== 0) suffix = ones[n % 10];
+    else if (n % 100 !== 0) suffix = tens[(n / 10) % 10];
+    else suffix = "as";
+    return `${n}-${suffix}`;
+  }
+
+  /** A következő lépés javaslata egy végigjátszott dal után (fokozatosság). */
+  function suggestNext({ cleanBars, totalBars, hands, practice, tempo, songIndex, songCount }) {
+    if (cleanBars < totalBars) {
+      if (tempo > 50) {
+        const v = tempo - 10;
+        return { text: `Próbáld ${numberAdjective(v)} tempón, és figyelj a hibás ütemekre.`, action: { kind: "tempo", value: v }, label: `${v} BPM` };
+      }
+      return { text: "Még egy kör, és meglesz.", action: { kind: "retry" }, label: "Még egyszer" };
+    }
+    if (!practice) {
+      return { text: "Kapcsold be a Gyakorlást: a dal megvárja, amíg leütöd a hangot.", action: { kind: "practice" }, label: "Gyakorlás be" };
+    }
+    if (hands === "right") return { text: "Jöhet a bal kéz külön.", action: { kind: "hands", value: "left" }, label: "Bal kéz" };
+    if (hands === "left") return { text: "Most próbáld mindkét kézzel.", action: { kind: "hands", value: "both" }, label: "Mindkét kéz" };
+    if (tempo < 120) {
+      const v = Math.min(120, tempo + 10);
+      return { text: `Próbáld ${numberAdjective(v)} tempón.`, action: { kind: "tempo", value: v }, label: `${v} BPM` };
+    }
+    if (songIndex + 1 < songCount) {
+      return { text: "Ez megvan! Jöhet a következő dal.", action: { kind: "song", index: songIndex + 1 }, label: "Következő dal" };
+    }
+    return { text: "Minden dal megy teljes tempón. Gratulálok!", action: null, label: null };
+  }
+
+  global.PianoCore = Object.freeze({
+    HANDS, MODE_LABELS, HAND_LABELS,
+    parsePitch, parseDuration, parseToken, isBlack, keyName, beatsPerBar,
+    buildTimeline, keyboardRange, songBarCount, validateSong, availableModes, hasArpeggio, requiredMidis,
+    sessionInit, sessionReduce, numberAdjective, suggestNext,
+  });
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+
+<style>
+:root {
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-2: #f2ede4;
+  --ink: #1f2430;
+  --muted: #687080;
+  --line: #e4ddd0;
+  --accent: #1e4fa8;
+  --accent-ink: #ffffff;
+  --rh: #2563eb;
+  --rh-soft: rgba(37, 99, 235, 0.14);
+  --lh: #e07212;
+  --lh-soft: rgba(224, 114, 18, 0.16);
+  --ok: #15924a;
+  --bad: #d9534f;
+  --white-key: #ffffff;
+  --white-key-edge: #d8d2c6;
+  --black-key: #22252c;
+  --shadow: 0 1px 2px rgba(30, 30, 40, 0.06), 0 4px 14px rgba(30, 30, 40, 0.07);
+  --radius: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161b; --surface: #1d2027; --surface-2: #272b34; --ink: #eef0f4; --muted: #9aa3b2;
+    --line: #343946; --accent: #7aa2ff; --accent-ink: #0f1420; --rh: #4a80f0; --rh-soft: rgba(74, 128, 240, 0.24);
+    --lh: #f08a2c; --lh-soft: rgba(240, 138, 44, 0.22); --ok: #3fcf78; --bad: #ff7b7f;
+    --white-key: #ebe8e2; --white-key-edge: #9c978d; --black-key: #0c0d10;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161b; --surface: #1d2027; --surface-2: #272b34; --ink: #eef0f4; --muted: #9aa3b2;
+  --line: #343946; --accent: #7aa2ff; --accent-ink: #0f1420; --rh: #4a80f0; --rh-soft: rgba(74, 128, 240, 0.24);
+  --lh: #f08a2c; --lh-soft: rgba(240, 138, 44, 0.22); --ok: #3fcf78; --bad: #ff7b7f;
+  --white-key: #ebe8e2; --white-key-edge: #9c978d; --black-key: #0c0d10;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.4;
+  -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; overscroll-behavior: none;
+}
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.screen {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ---------- Közös vezérlők ---------- */
+.icon-btn {
+  min-width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; font-weight: 700; font-size: 18px;
+}
+.icon-btn:active { background: var(--surface-2); }
+.icon-btn svg { width: 24px; height: 24px; }
+.btn {
+  min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface);
+  padding: 0 16px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn:active { transform: translateY(1px); }
+.btn svg { width: 22px; height: 22px; flex: none; }
+.seg {
+  display: inline-flex; background: var(--surface-2); border-radius: 12px; padding: 3px; gap: 2px; min-width: 0;
+}
+.seg button {
+  min-height: 38px; border: 0; border-radius: 9px; background: transparent; padding: 0 10px;
+  font-weight: 600; font-size: 14px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+}
+.seg button[aria-checked="true"] { background: var(--surface); box-shadow: var(--shadow); }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.dot.r { background: var(--rh); }
+.dot.l { background: var(--lh); }
+.dot.b { background: linear-gradient(90deg, var(--rh) 50%, var(--lh) 50%); }
+.chip {
+  min-height: 44px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+  padding: 0 14px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+}
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.chip .sw {
+  width: 30px; height: 18px; border-radius: 9px; background: var(--line); position: relative; flex: none; transition: background .15s;
+}
+.chip .sw::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; transition: transform .15s;
+}
+.chip[aria-pressed="true"] .sw { background: rgba(255, 255, 255, 0.35); }
+.chip[aria-pressed="true"] .sw::after { transform: translateX(12px); }
+input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); margin: 0; }
+
+/* ---------- Kezdőlap ---------- */
+#home { overflow-y: auto; display: block; }
+.home-inner { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
+.home-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 16px; }
+.home-top h1 { font-size: 28px; margin: 0; letter-spacing: -0.01em; }
+.home-top p { margin: 2px 0 0; color: var(--muted); }
+.card {
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 16px; margin-bottom: 12px; border: 1px solid var(--line);
+}
+.today { display: flex; align-items: center; gap: 16px; }
+.today h2, .song-card h2 { font-size: 17px; margin: 0 0 2px; }
+.today p { margin: 0; color: var(--muted); font-size: 14px; }
+.ring { width: 64px; height: 64px; flex: none; }
+.ring .bg { stroke: var(--surface-2); }
+.ring .fg { stroke: var(--ok); transition: stroke-dashoffset .4s; }
+.ring text { fill: var(--ink); font-size: 15px; font-weight: 700; }
+.section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 20px 4px 8px; }
+.song-card .head { display: flex; gap: 12px; align-items: flex-start; }
+.badge {
+  width: 36px; height: 36px; border-radius: 10px; background: var(--rh-soft); color: var(--rh);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; flex: none;
+}
+.song-card .meta { color: var(--muted); font-size: 14px; margin: 0; }
+.song-card .note { font-size: 13px; color: var(--muted); background: var(--surface-2); border-radius: 10px; padding: 8px 10px; margin: 10px 0 0; }
+.progress { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; margin: 12px 0 6px; }
+.progress > span { display: block; height: 100%; background: var(--ok); border-radius: 4px; transition: width .4s; }
+.song-card .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--muted); }
+
+/* ---------- Gyakorló képernyő ---------- */
+.topbar {
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px; flex: none;
+  border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.topbar .seg { flex: none; }
+.topbar .seg button { padding: 0 9px; font-size: 13px; }
+.topbar select {
+  flex: 1 1 0; min-width: 0; height: 44px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface); padding: 0 10px; font-weight: 700; font-size: 15px; text-overflow: ellipsis;
+}
+.score-wrap { flex: 40 1 0; min-height: 90px; position: relative; overflow: hidden; }
+.score-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.now {
+  flex: none; display: flex; align-items: center; gap: 10px; padding: 4px 12px; min-height: 52px;
+  border-top: 1px solid var(--line);
+}
+.now-text { flex: 1 1 auto; min-width: 0; }
+.now-main { font-size: 24px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-main sup { font-size: 13px; font-weight: 700; margin-left: 2px; }
+.now-main .sep { color: var(--muted); font-weight: 400; margin: 0 6px; }
+.now-sub { font-size: 14px; color: var(--muted); min-height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-sub.ok { color: var(--ok); font-weight: 600; }
+.now-sub.bad { color: var(--bad); font-weight: 600; }
+.hand-r { color: var(--rh); }
+.hand-l { color: var(--lh); }
+.beats { display: flex; gap: 6px; flex: none; }
+.beats i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
+.beats i.first { width: 14px; height: 14px; margin-top: -2px; }
+.beats i.on { background: var(--accent); }
+
+.keys-wrap { flex: 45 1 0; min-height: 120px; padding: 0 4px 4px; display: flex; }
+.keys {
+  position: relative; flex: 1; touch-action: none; user-select: none; -webkit-user-select: none;
+  border-radius: 0 0 10px 10px; overflow: hidden; background: var(--black-key);
+}
+.key {
+  position: absolute; top: 0; border: 0; padding: 0; margin: 0; display: flex; flex-direction: column;
+  justify-content: flex-end; align-items: center; font-weight: 700; transition: background .08s;
+}
+.key.w {
+  bottom: 0; background: var(--white-key); border-right: 1px solid var(--white-key-edge);
+  border-radius: 0 0 7px 7px; color: #3a3f4b; padding-bottom: 8px; font-size: 16px; z-index: 1;
+}
+.key.b {
+  height: 60%; background: var(--black-key); color: #e8e8ea; border-radius: 0 0 5px 5px;
+  z-index: 2; padding-bottom: 6px; font-size: 10px; box-shadow: inset 0 -4px 0 rgba(255, 255, 255, 0.08);
+}
+.key .kl { pointer-events: none; line-height: 1; }
+.key.b .kl { writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: .02em; }
+.keys.no-labels .key:not(.tgt-r):not(.tgt-l) .kl { visibility: hidden; }
+.key .mc { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-bottom: 6px; pointer-events: none; }
+.key .kf {
+  pointer-events: none; display: none; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+  font-size: 14px; line-height: 24px; text-align: center; margin-bottom: 6px; font-weight: 800;
+}
+.key.b .kf { width: 18px; height: 18px; line-height: 18px; font-size: 11px; margin-bottom: 4px; }
+.key.tgt-r { background: var(--rh); color: #fff; }
+.key.tgt-l { background: var(--lh); color: #2a1600; }
+.key.tgt-r .kf { display: block; color: var(--rh); }
+.key.tgt-l .kf { display: block; color: var(--lh); }
+.key.tgt-r, .key.tgt-l { animation: pulse 1.6s ease-in-out infinite; }
+.key.done { background: var(--ok); color: #fff; animation: none; }
+.key.done .kf { display: block; color: var(--ok); }
+.key.down { filter: brightness(0.86); }
+.key.flash-ok { background: var(--ok) !important; color: #fff; }
+.key.flash-bad { background: var(--bad) !important; color: #fff; }
+.key.flash-bad::before {
+  content: "✕"; position: absolute; top: 18%; left: 0; right: 0; text-align: center; font-size: 18px; color: #fff;
+}
+@keyframes pulse { 50% { filter: brightness(1.12) saturate(1.1); } }
+
+.controls { flex: none; padding: 6px 10px 8px; display: grid; gap: 6px; border-top: 1px solid var(--line); background: var(--bg); }
+.controls .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.controls .row.spread { justify-content: space-between; }
+.tempo-label { font-size: 14px; font-weight: 700; white-space: nowrap; min-width: 70px; text-align: right; }
+.tempo-label button { border: 0; background: none; padding: 0; font-weight: 700; min-height: 44px; }
+.icon-btn.toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.transport { display: grid !important; grid-template-columns: auto 1fr auto; }
+.transport .btn { width: 100%; padding: 0 12px; }
+@media (max-width: 374px) {
+  .topbar { gap: 2px; padding: 4px 4px; }
+  .topbar .icon-btn { min-width: 40px; padding: 0 4px; }
+  .topbar .seg button { padding: 0 7px; font-size: 12px; }
+  .transport .btn:not(.primary) svg, .controls .seg .dot { display: none; }
+  .controls .chip { padding: 0 10px; }
+}
+
+/* Fekvő mód: szélesebb billentyűzet, egy sor vezérlés */
+@media (orientation: landscape) and (max-height: 540px) {
+  .topbar { padding: 2px 8px; }
+  .topbar .icon-btn, .topbar select { height: 40px; }
+  .now { min-height: 34px; padding: 0 12px; }
+  .now-text { display: flex; align-items: baseline; gap: 14px; }
+  .now-main { font-size: 20px; flex: none; }
+  .score-wrap { flex: 56 1 0; }
+  .keys-wrap { flex: 44 1 0; min-height: 96px; }
+  .controls { grid-template-columns: auto auto minmax(140px, 1fr) auto; align-items: center; padding: 4px 10px 6px; }
+  .controls .row { gap: 6px; }
+  .controls .row.hands { order: 1; }
+  .controls .transport { order: 2; grid-template-columns: auto auto auto; }
+  .controls .tempo-row { order: 3; }
+  .transport .btn span { display: none; }
+  .transport .btn { padding: 0 14px; }
+}
+
+/* ---------- Lap (súgó, metronóm, siker) ---------- */
+.backdrop { position: fixed; inset: 0; background: rgba(10, 12, 18, 0.45); z-index: 20; animation: fade .18s; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 88vh; overflow-y: auto;
+  background: var(--surface); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.18);
+  padding: 8px 16px calc(20px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto;
+  animation: up .22s ease-out;
+}
+.sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 4px auto 8px; }
+.sheet h2 { font-size: 20px; margin: 4px 0 12px; }
+.sheet h3 { font-size: 15px; margin: 16px 0 6px; }
+.sheet p, .sheet li { color: var(--ink); font-size: 15px; }
+.sheet ul { padding-left: 20px; margin: 6px 0; }
+.sheet .muted { color: var(--muted); }
+.sheet .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.sheet .actions .btn { flex: 1 1 140px; }
+.sheet .setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--line); }
+.sheet .setting:last-child { border-bottom: 0; }
+@keyframes up { from { transform: translateY(30px); opacity: 0; } }
+@keyframes fade { from { opacity: 0; } }
+
+.metro-bpm { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 8px 0; }
+.metro-bpm output { font-size: 56px; font-weight: 800; min-width: 120px; text-align: center; font-variant-numeric: tabular-nums; }
+.metro-bpm small { display: block; font-size: 14px; color: var(--muted); font-weight: 600; text-align: center; margin-top: -8px; }
+.metro-bpm .btn { width: 56px; height: 56px; font-size: 26px; border-radius: 50%; padding: 0; }
+.metro-beats { display: flex; justify-content: center; gap: 14px; margin: 12px 0; }
+.metro-beats i { width: 18px; height: 18px; border-radius: 50%; background: var(--line); display: block; transition: background .05s; }
+.metro-beats i.first { width: 26px; height: 26px; margin-top: -4px; }
+.metro-beats i.on { background: var(--accent); }
+
+.success { text-align: center; }
+.success svg { width: 72px; height: 72px; margin: 8px auto 0; display: block; }
+.success svg circle { stroke: var(--ok); stroke-dasharray: 190; stroke-dashoffset: 190; animation: draw .6s ease-out forwards; }
+.success svg path { stroke: var(--ok); stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .3s .45s ease-out forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.success .stat { font-size: 18px; font-weight: 700; }
+
+.mini-kb { display: block; width: 100%; max-width: 320px; margin: 8px auto; }
+.ob-dots { display: flex; justify-content: center; gap: 8px; margin: 12px 0 0; }
+.ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.ob-dots i.on { background: var(--accent); }
+.finger-row { display: flex; justify-content: center; gap: 10px; margin: 12px 0; }
+.finger-row span {
+  width: 40px; height: 40px; border-radius: 50%; background: var(--rh-soft); color: var(--rh);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px;
+}
+.legend { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; margin: 10px 0; }
+.legend .sw { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; }
+
+.toast {
+  position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top)); transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 15px;
+  z-index: 30; box-shadow: var(--shadow); white-space: nowrap; pointer-events: none; transition: opacity .25s, transform .25s;
+}
+.toast.hide { opacity: 0; transform: translate(-50%, -8px); }
+
+/* ---------- Kotta (SVG) ---------- */
+.sc-line { stroke: var(--ink); stroke-width: 1; opacity: .55; }
+.sc-bar { stroke: var(--ink); stroke-width: 1.2; opacity: .7; }
+.sc-clef { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; }
+.sc-clef-dot { fill: var(--ink); }
+.sc-ts { fill: var(--ink); font: 700 19px Georgia, "Times New Roman", serif; }
+.sc-barno { fill: var(--muted); font-size: 9px; font-weight: 600; }
+.sc-chord { fill: var(--muted); font-size: 12px; font-weight: 700; }
+.sc-chord.cur { fill: var(--accent); }
+.sc-label { font-size: 11px; font-weight: 600; }
+.sc-label .f { font-size: 8.5px; font-weight: 800; }
+.sc-next { fill: var(--muted); font-size: 11px; font-weight: 700; }
+.n-fut { color: var(--ink); }
+.n-past { color: var(--muted); opacity: .5; }
+.n-cur-right { color: var(--rh); }
+.n-cur-left { color: var(--lh); }
+.n-done { color: var(--ok); }
+.n-fut .f { fill: var(--muted); }
+.sc-band-right { fill: var(--rh-soft); }
+.sc-band-left { fill: var(--lh-soft); }
+.sc-band-both { fill: var(--rh-soft); }
+.sc-band { animation: pulse-band 1.6s ease-in-out infinite; }
+@keyframes pulse-band { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  .key.tgt-r, .key.tgt-l, .sc-band { animation: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Kezdőlap -->
+  <section id="home" class="screen" aria-labelledby="homeTitle">
+    <div class="home-inner">
+      <div class="home-top">
+        <div>
+          <h1 id="homeTitle">Szia!</h1>
+          <p>Napi pár perc, és meglesz a három dal.</p>
+        </div>
+        <div>
+          <button class="icon-btn" id="homeHelp" aria-label="Súgó és beállítások">?</button>
+        </div>
+      </div>
+      <div class="card today" id="todayCard"></div>
+      <div class="section-title">Dalok</div>
+      <div id="songList"></div>
+    </div>
+  </section>
+
+  <!-- Gyakorló képernyő -->
+  <section id="practice" class="screen" hidden aria-label="Gyakorlás">
+    <header class="topbar">
+      <button class="icon-btn" id="backBtn" aria-label="Vissza a kezdőlapra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <select id="songSelect" aria-label="Dal kiválasztása"></select>
+      <div class="seg" id="modeSeg" role="radiogroup" aria-label="Mód">
+        <button role="radio" data-mode="melody">Dallam</button>
+        <button role="radio" data-mode="chords">Akkordok</button>
+      </div>
+      <button class="icon-btn" id="helpBtn" aria-label="Súgó és beállítások">?</button>
+    </header>
+
+    <div class="score-wrap" id="scoreWrap">
+      <svg id="score" role="img" aria-label="Kotta"></svg>
+    </div>
+
+    <div class="now">
+      <div class="now-text">
+        <div class="now-main" id="nowMain"></div>
+        <div class="now-sub" id="nowSub" aria-live="polite"></div>
+      </div>
+      <div class="beats" id="beatDots" aria-hidden="true"></div>
+      <button class="chip" id="arpBtn" aria-pressed="false" hidden><span class="sw"></span>Felbontva</button>
+    </div>
+
+    <div class="keys-wrap">
+      <div class="keys" id="keys" role="group" aria-label="Zongorabillentyűzet"></div>
+    </div>
+
+    <footer class="controls">
+      <div class="row tempo-row">
+        <button class="icon-btn toggle" id="metroBtn" aria-pressed="false" aria-label="Metronóm be/ki">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M9 3h6l4 18H5L9 3z"/><path d="M12 16l5-9"/><path d="M7.5 15h9"/></svg>
+        </button>
+        <input type="range" id="tempo" min="40" max="120" step="1" aria-label="Tempó (BPM)">
+        <div class="tempo-label"><button id="tempoBtn" aria-label="Metronóm beállításai"><span id="tempoVal">60</span> BPM</button></div>
+      </div>
+      <div class="row spread hands">
+        <div class="seg" id="handSeg" role="radiogroup" aria-label="Kéz">
+          <button role="radio" data-hands="right"><span class="dot r"></span>Jobb</button>
+          <button role="radio" data-hands="left"><span class="dot l"></span>Bal</button>
+          <button role="radio" data-hands="both"><span class="dot b"></span>Mindkettő</button>
+        </div>
+        <button class="chip" id="practiceBtn" aria-pressed="false"><span class="sw"></span>Gyakorlás</button>
+      </div>
+      <div class="row transport">
+        <button class="btn" id="restartBtn" aria-label="Újra az elejéről">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg><span>Újra</span>
+        </button>
+        <button class="btn primary" id="playBtn" aria-label="Lejátszás">
+          <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z"/></svg><span id="playLabel">Lejátszás</span>
+        </button>
+        <button class="btn" id="nextBtn" aria-label="Következő hang">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6v12l8.5-6z"/><rect x="16" y="6" width="2.5" height="12" rx="1"/></svg><span>Következő</span>
+        </button>
+      </div>
+    </footer>
+  </section>
+</div>
+
+<div id="overlay" hidden></div>
+<div class="toast hide" id="toast" role="status" aria-live="polite"></div>
+
+<script id="app-script">
+(function () {
+  "use strict";
+  const {
+    MODE_LABELS, HAND_LABELS, parsePitch, isBlack, keyName, buildTimeline, keyboardRange, songBarCount,
+    validateSong, availableModes, hasArpeggio, requiredMidis, sessionInit, sessionReduce, suggestNext,
+  } = window.PianoCore;
+
+  /* ================= Tárolás (localStorage, hibatűrően) ================= */
+  const Store = {
+    prefix: "zongora.v1.",
+    get(key, fallback) {
+      try {
+        const raw = localStorage.getItem(this.prefix + key);
+        return raw == null ? fallback : JSON.parse(raw);
+      } catch (_) { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); } catch (_) { /* privát mód / tele */ }
+    },
+    remove(key) {
+      try { localStorage.removeItem(this.prefix + key); } catch (_) { /* nincs teendő */ }
+    },
+  };
+
+  const DEFAULT_SETTINGS = {
+    tempo: 60, metronome: false, countIn: true, volume: 0.6, keyLabels: true,
+    theme: "auto", practice: false, hands: "right",
+  };
+  const settings = Object.assign({}, DEFAULT_SETTINGS, Store.get("settings", {}));
+  const saveSettings = () => Store.set("settings", settings);
+
+  const Progress = {
+    all: Store.get("progress", {}),
+    bars(songId) { return this.all[songId] || []; },
+    add(songId, bar) {
+      const list = this.bars(songId);
+      if (list.includes(bar)) return;
+      this.all[songId] = [...list, bar].sort((a, b) => a - b);
+      Store.set("progress", this.all);
+    },
+    reset() { this.all = {}; Store.remove("progress"); },
+  };
+
+  const DAILY_GOAL_MIN = 10;
+  const todayKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const PracticeLog = {
+    secondsToday() { return (Store.get("log", {})[todayKey()]) || 0; },
+    add(seconds) {
+      const log = Store.get("log", {});
+      const k = todayKey();
+      log[k] = (log[k] || 0) + seconds;
+      Store.set("log", log);
+    },
+  };
+
+  /* ================= Hang (Web Audio) ================= */
+  const Sound = (() => {
+    let ctx = null, master = null, noise = null;
+    const voices = [];
+    const MAX_VOICES = 40;
+
+    function ensure() {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC({ latencyHint: "interactive" });
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 4;
+        comp.attack.value = 0.003; comp.release.value = 0.2;
+        master = ctx.createGain();
+        master.gain.value = 0.9;
+        master.connect(comp).connect(ctx.destination);
+        const len = Math.floor(ctx.sampleRate * 0.025);
+        noise = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = noise.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+      }
+      if (ctx.state === "suspended") ctx.resume();
+      return ctx;
+    }
+
+    /** Szintetizált zongoraszerű hang: gyors indítás, exponenciális lecsengés, sötétedő hangszín. */
+    function note(midi, when, dur, velocity = 0.8) {
+      if (!ensure()) return null;
+      const t = Math.max(when != null ? when : ctx.currentTime, ctx.currentTime);
+      const f = 440 * Math.pow(2, (midi - 69) / 12);
+      const tau = Math.min(1.2, Math.max(0.3, 0.85 * Math.sqrt(262 / f)));
+      const out = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.Q.value = 0.5;
+      filter.frequency.setValueAtTime(Math.min(f * 10, 10000), t);
+      filter.frequency.setTargetAtTime(Math.max(f * 2.5, 800), t + 0.01, 0.3);
+      const peak = 0.3 * velocity;
+      out.gain.setValueAtTime(0.0001, t);
+      out.gain.linearRampToValueAtTime(peak, t + 0.005);
+      out.gain.setTargetAtTime(0.0001, t + 0.005, tau);
+      let end = t + tau * 5;
+      if (dur != null) {
+        const release = t + Math.max(dur, 0.2);
+        out.gain.setTargetAtTime(0.0001, release, 0.08);
+        end = Math.min(end, release + 0.5);
+      }
+      const partials = [[1, "triangle", 1], [2, "sine", 0.4], [3, "sine", 0.12], [4.02, "sine", 0.05]];
+      const oscs = partials.map(([mult, type, gain]) => {
+        const o = ctx.createOscillator();
+        o.type = type;
+        o.frequency.value = f * mult;
+        const g = ctx.createGain();
+        g.gain.value = gain;
+        o.connect(g).connect(filter);
+        o.start(t);
+        o.stop(end);
+        return o;
+      });
+      filter.connect(out).connect(master);
+      const voice = {
+        start: t,
+        cancel() { const now = ctx.currentTime; oscs.forEach((o) => { try { o.stop(Math.max(now, t)); } catch (_) { /* már leállt */ } }); },
+      };
+      oscs[0].onended = () => {
+        out.disconnect();
+        const i = voices.indexOf(voice);
+        if (i >= 0) voices.splice(i, 1);
+      };
+      voices.push(voice);
+      if (voices.length > MAX_VOICES) voices.shift().cancel();
+      return voice;
+    }
+
+    function click(when, accent, volume) {
+      if (!ensure() || volume <= 0) return;
+      const src = ctx.createBufferSource();
+      src.buffer = noise;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = accent ? 3400 : 2300;
+      bp.Q.value = 1.4;
+      const g = ctx.createGain();
+      g.gain.value = (accent ? 1.0 : 0.6) * volume;
+      src.connect(bp).connect(g).connect(master);
+      src.start(when);
+    }
+
+    return {
+      ensure, note, click,
+      get ctx() { return ctx; },
+      now: () => (ctx ? ctx.currentTime : 0),
+      /** Ami most szól (a kimeneti késleltetéssel korrigálva) — a vizuális szinkronhoz. */
+      heardTime: () => (ctx ? ctx.currentTime - (ctx.outputLatency || 0) : 0),
+    };
+  })();
+
+  /* ================= Ütemező: metronóm + bemutató lejátszás ================= */
+  const Player = (() => {
+    const LOOKAHEAD = 0.12;
+    let running = false, timer = 0, raf = 0;
+    let anchorTime = 0, anchorBeat = 0, spb = 1, nextBeat = 0;
+    let demo = null;
+    let visualQueue = [];
+    let handlers = {};
+
+    const timeAt = (b) => anchorTime + (b - anchorBeat) * spb;
+    const beatAt = (t) => anchorBeat + (t - anchorTime) / spb;
+
+    function setTempo(bpm) {
+      if (running) {
+        const now = Sound.now();
+        anchorBeat = beatAt(now);
+        anchorTime = now;
+      }
+      spb = 60 / bpm;
+    }
+
+    function start(startAt, demoState = null) {
+      stop();
+      demo = demoState;
+      anchorTime = startAt;
+      anchorBeat = 0;
+      nextBeat = 0;
+      running = true;
+      timer = setInterval(tick, 25);
+      tick();
+      raf = requestAnimationFrame(frame);
+    }
+
+    function stop() {
+      running = false;
+      clearInterval(timer);
+      cancelAnimationFrame(raf);
+      cancelDemoVoices();
+      demo = null;
+      visualQueue = [];
+    }
+
+    function cancelDemoVoices() {
+      if (!demo) return;
+      const now = Sound.now();
+      demo.voices.forEach((v) => { if (v && v.start > now) v.cancel(); });
+    }
+
+    function tick() {
+      if (!running || !Sound.ctx) return;
+      const horizon = Sound.now() + LOOKAHEAD;
+      while (timeAt(nextBeat) < horizon) {
+        scheduleBeat(nextBeat);
+        nextBeat++;
+      }
+      if (demo) scheduleDemo(horizon);
+      visualQueue.sort((a, b) => a.t - b.t);
+    }
+
+    function scheduleBeat(b) {
+      const t = timeAt(b);
+      const countIn = demo && b < demo.countIn;
+      const tlBeat = demo ? b - demo.countIn + demo.barStart : b;
+      const bpb = handlers.beatsPerBar();
+      const beatInBar = ((Math.round(tlBeat) % bpb) + bpb) % bpb;
+      if (settings.metronome || countIn) Sound.click(t, beatInBar === 0, settings.volume);
+      visualQueue.push({ t, type: "beat", beatInBar, countIn: countIn ? b + 1 : 0 });
+    }
+
+    function scheduleDemo(horizon) {
+      for (;;) {
+        if (demo.ptr >= demo.steps.length) {
+          if (!demo.loop) {
+            if (!demo.endQueued) {
+              visualQueue.push({ t: timeAt(demo.countIn + demo.totalBeats - demo.barStart), type: "demoEnd" });
+              demo.endQueued = true;
+            }
+            return;
+          }
+          demo.cycle++;
+          demo.ptr = 0;
+          demo.voices = demo.voices.filter((v) => v && v.start > Sound.now());
+        }
+        const step = demo.steps[demo.ptr];
+        const b = demo.countIn + step.start + demo.cycle * demo.totalBeats - demo.barStart;
+        const t = timeAt(b);
+        if (t >= horizon) return;
+        if (step.index >= demo.fromIndex || demo.cycle > 0) {
+          for (const n of step.notes) {
+            const vel = n.accent ? 0.95 : n.hand === "left" ? 0.6 : 0.72;
+            demo.voices.push(Sound.note(n.midi, t, n.dur * spb, vel));
+          }
+          visualQueue.push({ t, type: "step", index: step.index });
+        }
+        demo.ptr++;
+      }
+    }
+
+    function frame() {
+      if (!running) return;
+      const heard = Sound.heardTime();
+      while (visualQueue.length && visualQueue[0].t <= heard) {
+        const ev = visualQueue.shift();
+        if (ev.type === "beat") handlers.onBeat(ev.beatInBar, ev.countIn);
+        else if (ev.type === "step") handlers.onDemoStep(ev.index);
+        else if (ev.type === "demoEnd") { demo = null; handlers.onDemoEnd(); }
+      }
+      raf = requestAnimationFrame(frame);
+    }
+
+    return {
+      init(h) { handlers = h; },
+      setTempo,
+      get running() { return running; },
+      get demoActive() { return !!demo; },
+      /** Bemutató a megadott lépés ütemének elejétől, opcionális 1 ütemes visszaszámlálással. */
+      startDemo({ timeline, fromIndex, countIn }) {
+        if (!Sound.ensure()) return;
+        const bar = timeline.bars[timeline.steps[fromIndex].bar];
+        start(Sound.now() + 0.08, {
+          steps: timeline.steps, ptr: bar.steps[0], fromIndex: bar.steps[0],
+          barStart: bar.start, countIn: countIn ? timeline.bpb : 0, totalBeats: timeline.totalBeats,
+          loop: timeline.loop, cycle: 0, voices: [], endQueued: false,
+        });
+      },
+      stopDemo() {
+        cancelDemoVoices();
+        demo = null;
+        visualQueue = visualQueue.filter((e) => e.type === "beat" && !e.countIn);
+        if (!settings.metronome) stop();
+      },
+      startMetronome() { if (!running && Sound.ensure()) start(Sound.now() + 0.05); },
+      stopIfIdle() { if (!demo) stop(); },
+      stop,
+    };
+  })();
+
+  /* ================= Állapot ================= */
+  const state = {
+    screen: "home",
+    song: null,
+    mode: null,
+    arpeggio: false,
+    timeline: null,
+    range: { low: 48, high: 71 },
+    session: sessionInit(0),
+    demoStep: -1,
+    countIn: 0,
+    beat: -1,
+    feedback: null,
+    lastInteraction: 0,
+  };
+
+  const $ = (sel) => document.querySelector(sel);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const validSongs = SONGS.filter((song) => {
+    const errors = validateSong(song);
+    errors.forEach((e) => console.error("[dal]", e));
+    return errors.length === 0;
+  }).sort((a, b) => a.level - b.level);
+  const barTotals = Object.fromEntries(validSongs.map((s) => [s.id, songBarCount(s)]));
+
+  const viewStepIndex = () => (Player.demoActive && state.demoStep >= 0 ? state.demoStep : state.session.stepIndex);
+  const currentStep = () => state.timeline && state.timeline.steps[viewStepIndex()];
+
+  /* ================= Téma ================= */
+  function applyTheme() {
+    if (settings.theme === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = settings.theme;
+  }
+
+  /* ================= Kezdőlap ================= */
+  function renderHome() {
+    const minutes = Math.floor(PracticeLog.secondsToday() / 60);
+    const ratio = Math.min(1, minutes / DAILY_GOAL_MIN);
+    const C = 2 * Math.PI * 26;
+    const msg = minutes >= DAILY_GOAL_MIN ? "Megvan a mai adag. Szép!" : minutes > 0 ? "Jó úton vagy, folytasd!" : "Kezdd egy rövid körrel.";
+    $("#todayCard").innerHTML = `
+      <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
+        <circle class="bg" cx="32" cy="32" r="26" fill="none" stroke-width="7"/>
+        <circle class="fg" cx="32" cy="32" r="26" fill="none" stroke-width="7" stroke-linecap="round"
+          stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - ratio)}" transform="rotate(-90 32 32)"/>
+        <text x="32" y="37" text-anchor="middle">${minutes}′</text>
+      </svg>
+      <div>
+        <h2>Mai gyakorlás</h2>
+        <p>${minutes} / ${DAILY_GOAL_MIN} perc · cél: napi 10–15 perc</p>
+        <p>${msg}</p>
+      </div>`;
+
+    $("#songList").innerHTML = validSongs.map((song, i) => {
+      const done = Progress.bars(song.id).length;
+      const total = barTotals[song.id];
+      const pct = Math.round((done / total) * 100);
+      const modes = availableModes(song).map((m) => MODE_LABELS[m].toLowerCase()).join(", ");
+      return `
+        <article class="card song-card">
+          <div class="head">
+            <div class="badge" aria-hidden="true">${i + 1}</div>
+            <div style="flex:1;min-width:0">
+              <h2>${esc(song.title)}</h2>
+              <p class="meta">${esc(song.composer)} · ${song.meter[0]}/${song.meter[1]} · ${esc(song.summary)}</p>
+              <p class="meta">Mód: ${esc(modes)}</p>
+            </div>
+          </div>
+          ${song.copyrightNote ? `<p class="note">${esc(song.copyrightNote)}</p>` : ""}
+          <div class="progress" role="progressbar" aria-label="Haladás" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><span style="width:${pct}%"></span></div>
+          <div class="foot">
+            <span>${done} / ${total} ütem hibátlan</span>
+            <button class="btn primary" data-open="${esc(song.id)}">${done > 0 ? "Folytatás" : "Kezdés"}</button>
+          </div>
+        </article>`;
+    }).join("");
+  }
+
+  function showScreen(name) {
+    state.screen = name;
+    $("#toast").classList.add("hide");
+    $("#home").hidden = name !== "home";
+    $("#practice").hidden = name !== "practice";
+    if (name === "home") {
+      Player.stop();
+      state.demoStep = -1;
+      renderHome();
+    } else {
+      renderKeyboard();
+      renderPractice();
+    }
+  }
+
+  /* ================= Dal / mód / kéz ================= */
+  function openSong(id) {
+    const song = validSongs.find((s) => s.id === id) || validSongs[0];
+    const prefs = Store.get("songPrefs", {})[song.id] || {};
+    state.song = song;
+    const modes = availableModes(song);
+    state.mode = modes.includes(prefs.mode) ? prefs.mode : modes[0];
+    state.arpeggio = !!prefs.arpeggio && hasArpeggio(song, state.mode);
+    state.range = keyboardRange(song);
+    rebuild(0);
+    if (state.screen !== "practice") showScreen("practice");
+    else { renderKeyboard(); renderPractice(); }
+  }
+
+  function saveSongPrefs() {
+    const all = Store.get("songPrefs", {});
+    all[state.song.id] = { mode: state.mode, arpeggio: state.arpeggio };
+    Store.set("songPrefs", all);
+  }
+
+  /** Új idővonal (mód/kéz/felbontás váltásakor) — a megadott ütem elejétől folytatja. */
+  function rebuild(targetBar) {
+    if (Player.demoActive) Player.stopDemo();
+    state.demoStep = -1;
+    state.countIn = 0;
+    state.timeline = buildTimeline(state.song, { mode: state.mode, hands: settings.hands, arpeggio: state.arpeggio });
+    const steps = state.timeline.steps;
+    const idx = Math.max(0, steps.findIndex((s) => s.bar >= targetBar));
+    state.session = sessionInit(idx === -1 ? 0 : idx);
+  }
+
+  const currentBar = () => {
+    const s = currentStep();
+    return s ? s.bar : 0;
+  };
+
+  /* ================= Billentyűzet ================= */
+  let keyEls = new Map();
+
+  function renderKeyboard() {
+    const { low, high } = state.range;
+    const whites = [];
+    for (let m = low; m <= high; m++) if (!isBlack(m)) whites.push(m);
+    const w = 100 / whites.length;
+    const bw = w * 0.62;
+    let html = "";
+    whites.forEach((m, i) => {
+      html += `<button class="key w" data-midi="${m}" style="left:${i * w}%;width:${w}%" aria-label="${keyName(m)}${m === 60 ? ", középső C" : ""}">
+        ${m === 60 ? '<span class="mc" aria-hidden="true"></span>' : ""}<span class="kf" aria-hidden="true"></span><span class="kl">${keyName(m)}</span></button>`;
+    });
+    for (let m = low; m <= high; m++) {
+      if (!isBlack(m)) continue;
+      const left = (whites.indexOf(m - 1) + 1) * w - bw / 2;
+      html += `<button class="key b" data-midi="${m}" style="left:${left}%;width:${bw}%" aria-label="${keyName(m)}">
+        <span class="kf" aria-hidden="true"></span><span class="kl">${keyName(m)}</span></button>`;
+    }
+    const keys = $("#keys");
+    keys.innerHTML = html;
+    keyEls = new Map([...keys.querySelectorAll(".key")].map((el) => [Number(el.dataset.midi), el]));
+    keys.classList.toggle("no-labels", !settings.keyLabels);
+  }
+
+  function renderKeyHighlights() {
+    const step = currentStep();
+    const targets = new Map();
+    if (step && !(state.session.finished && !Player.demoActive)) {
+      for (const n of step.notes) if (!targets.has(n.midi)) targets.set(n.midi, n);
+    }
+    const satisfied = Player.demoActive ? [] : state.session.satisfied;
+    keyEls.forEach((el, midi) => {
+      const n = targets.get(midi);
+      const done = !!n && satisfied.includes(midi);
+      el.classList.toggle("tgt-r", !!n && !done && n.hand === "right");
+      el.classList.toggle("tgt-l", !!n && !done && n.hand === "left");
+      el.classList.toggle("done", done);
+      const f = el.querySelector(".kf");
+      f.textContent = n && n.finger != null ? n.finger : "";
+      f.style.visibility = n && n.finger != null ? "visible" : "hidden";
+      const label = el.querySelector(".kl");
+      label.textContent = n ? n.name : keyName(midi);
+    });
+  }
+
+  function flashKey(midi, kind) {
+    const el = keyEls.get(midi);
+    if (!el) return;
+    const cls = kind === "ok" ? "flash-ok" : "flash-bad";
+    el.classList.remove("flash-ok", "flash-bad");
+    void el.offsetWidth;
+    el.classList.add(cls);
+    clearTimeout(el._flashTimer);
+    el._flashTimer = setTimeout(() => el.classList.remove(cls), kind === "ok" ? 260 : 420);
+  }
+
+  function setupKeyInput() {
+    const keys = $("#keys");
+    const release = (e) => {
+      const el = e.target.closest && e.target.closest(".key");
+      if (el) el.classList.remove("down");
+    };
+    keys.addEventListener("pointerdown", (e) => {
+      const el = e.target.closest(".key");
+      if (!el) return;
+      e.preventDefault();
+      el.classList.add("down");
+      pressKey(Number(el.dataset.midi));
+    });
+    keys.addEventListener("pointerup", release);
+    keys.addEventListener("pointercancel", release);
+    keys.addEventListener("pointerout", release);
+    keys.addEventListener("contextmenu", (e) => e.preventDefault());
+    keys.addEventListener("keydown", (e) => {
+      if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("key")) {
+        e.preventDefault();
+        pressKey(Number(e.target.dataset.midi));
+      }
+    });
+
+    // Számítógépes billentyűzet (fizikai helyzet szerint, QWERTZ-en is): alsó sor = C3–H3, felső sor = C4–H4.
+    const LOWER = ["KeyZ", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV", "KeyG", "KeyB", "KeyH", "KeyN", "KeyJ", "KeyM"];
+    const UPPER = ["KeyQ", "Digit2", "KeyW", "Digit3", "KeyE", "KeyR", "Digit5", "KeyT", "Digit6", "KeyY", "Digit7", "KeyU"];
+    document.addEventListener("keydown", (e) => {
+      if (state.screen !== "practice" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if ($("#overlay").hidden === false || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+      let midi = null;
+      if (LOWER.includes(e.code)) midi = 48 + LOWER.indexOf(e.code);
+      else if (UPPER.includes(e.code)) midi = 60 + UPPER.indexOf(e.code);
+      if (midi == null) return;
+      e.preventDefault();
+      pressKey(midi);
+    });
+  }
+
+  /* ================= Gyakorlás ================= */
+  function pressKey(midi) {
+    Sound.note(midi, null, null, 0.8);
+    state.lastInteraction = Date.now();
+    if (Player.demoActive || !state.timeline || state.session.finished) return;
+    dispatch({ type: "key", midi });
+  }
+
+  function dispatch(action) {
+    const { session, effects } = sessionReduce(state.session, action, state.timeline, { autoAdvance: settings.practice });
+    state.session = session;
+    for (const fx of effects) {
+      if (fx.type === "ok") flashKey(fx.midi, "ok");
+      else if (fx.type === "wrong") {
+        flashKey(fx.midi, "bad");
+        showFeedback(`Ez most ${keyName(fx.midi)} volt – a kivilágított billentyű jön.`, "bad");
+      } else if (fx.type === "stepDone") {
+        showFeedback(settings.practice ? "Szép!" : "Szép! Mehet a Következő gomb.", "ok");
+      } else if (fx.type === "barClean") {
+        Progress.add(state.song.id, fx.bar);
+        if (!session.finished) showToast("Szép! Jöhet a következő ütem.");
+      } else if (fx.type === "finished") {
+        setTimeout(showSuccess, 350);
+      }
+    }
+    renderPractice();
+  }
+
+  let feedbackTimer = 0;
+  function showFeedback(text, kind) {
+    state.feedback = { text, kind };
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => { state.feedback = null; renderNow(); }, 1800);
+    renderNow();
+  }
+
+  let toastTimer = 0;
+  function showToast(text) {
+    const t = $("#toast");
+    t.textContent = text;
+    t.classList.remove("hide");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.add("hide"), 1500);
+  }
+
+  /* ================= Gyakorló képernyő renderelése ================= */
+  function renderPractice() {
+    if (state.screen !== "practice" || !state.timeline) return;
+    renderHeader();
+    renderControls();
+    renderNow();
+    renderKeyHighlights();
+    renderScore();
+  }
+
+  function renderHeader() {
+    const sel = $("#songSelect");
+    if (sel.options.length !== validSongs.length) {
+      sel.innerHTML = validSongs.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join("");
+    }
+    sel.value = state.song.id;
+    const modes = availableModes(state.song);
+    $("#modeSeg").querySelectorAll("button").forEach((b) => {
+      const m = b.dataset.mode;
+      b.disabled = !modes.includes(m);
+      b.title = b.disabled ? "Ehhez a dalhoz szerzői jogi okból nincs dallam" : "";
+      b.setAttribute("aria-checked", String(m === state.mode));
+    });
+    const arp = $("#arpBtn");
+    arp.hidden = !hasArpeggio(state.song, state.mode);
+    arp.setAttribute("aria-pressed", String(state.arpeggio));
+  }
+
+  function renderControls() {
+    $("#handSeg").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.hands === settings.hands)));
+    $("#practiceBtn").setAttribute("aria-pressed", String(settings.practice));
+    $("#metroBtn").setAttribute("aria-pressed", String(settings.metronome));
+    $("#tempo").value = settings.tempo;
+    $("#tempoVal").textContent = settings.tempo;
+    const playing = Player.demoActive;
+    $("#playLabel").textContent = playing ? "Szünet" : "Lejátszás";
+    $("#playBtn").setAttribute("aria-label", playing ? "Szünet" : "Lejátszás (bemutató)");
+    $("#playIcon").innerHTML = playing
+      ? '<rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/>'
+      : '<path d="M8 5.5v13l10.5-6.5z"/>';
+    const bpb = state.timeline.bpb;
+    const dots = $("#beatDots");
+    if (dots.children.length !== bpb) dots.innerHTML = Array.from({ length: bpb }, (_, i) => `<i class="${i === 0 ? "first" : ""}"></i>`).join("");
+    dots.hidden = !Player.running;
+  }
+
+  function describeHand(step, hand) {
+    const notes = step.notes.filter((n) => n.hand === hand);
+    if (!notes.length) return null;
+    const cls = hand === "right" ? "hand-r" : "hand-l";
+    if (notes.length > 1 && step.chord) return { html: `<span class="${cls}">${esc(step.chord.name)}</span>`, notes };
+    const n = notes[0];
+    return { html: `<span class="${cls}">${esc(n.name)}${n.finger != null ? `<sup>${n.finger}</sup>` : ""}</span>`, notes };
+  }
+
+  function renderNow() {
+    const main = $("#nowMain"), sub = $("#nowSub");
+    sub.className = "now-sub";
+    const step = currentStep();
+    if (state.countIn) {
+      main.textContent = `${state.countIn}…`;
+      sub.textContent = "Figyelj, mindjárt indul.";
+      return;
+    }
+    if (!step) { main.textContent = ""; sub.textContent = ""; return; }
+    if (state.session.finished && !Player.demoActive) {
+      main.textContent = "Kész!";
+      sub.textContent = "Nyomd meg az Újra gombot egy új körhöz.";
+      return;
+    }
+    const parts = ["right", "left"].map((h) => describeHand(step, h)).filter(Boolean);
+    main.innerHTML = parts.map((p) => p.html).join('<span class="sep">·</span>');
+    if (state.feedback) {
+      sub.textContent = state.feedback.text;
+      sub.classList.add(state.feedback.kind);
+      return;
+    }
+    if (Player.demoActive) { sub.textContent = "Hallgasd meg, és figyeld a kivilágítást."; return; }
+    const chordPart = parts.find((p) => p.notes.length > 1);
+    if (chordPart) {
+      const ns = chordPart.notes.slice().sort((a, b) => a.midi - b.midi);
+      sub.textContent = `${ns.map((n) => n.name).join("–")} · ujjak: ${ns.map((n) => n.finger ?? "–").join("–")}`;
+    } else if (parts.length === 2) {
+      sub.textContent = "Kék: jobb kéz · narancs: bal kéz";
+    } else {
+      const n = parts[0].notes[0];
+      sub.textContent = `${HAND_LABELS[n.hand]}${n.finger != null ? ` · ${n.finger}. ujj` : ""} — keresd a ${n.hand === "right" ? "kék" : "narancs"} billentyűt`;
+    }
+  }
+
+  function onBeat(beatInBar, countIn) {
+    state.beat = beatInBar;
+    const prevCount = state.countIn;
+    state.countIn = countIn;
+    document.querySelectorAll("#beatDots, #metroBeats").forEach((dots) => {
+      [...dots.children].forEach((el, i) => el.classList.toggle("on", i === beatInBar));
+    });
+    if (countIn || prevCount) { renderNow(); renderKeyHighlights(); }
+  }
+
+  function onDemoStep(index) {
+    state.demoStep = index;
+    state.countIn = 0;
+    const step = state.timeline.steps[index];
+    step.notes.forEach((n) => {
+      const el = keyEls.get(n.midi);
+      if (!el) return;
+      el.classList.add("down");
+      setTimeout(() => el.classList.remove("down"), 140);
+    });
+    renderNow();
+    renderKeyHighlights();
+    renderScore();
+  }
+
+  function onDemoEnd() {
+    state.demoStep = -1;
+    state.countIn = 0;
+    state.session = sessionInit(0);
+    if (!settings.metronome) Player.stop();
+    showToast("Most te jössz!");
+    renderPractice();
+  }
+
+  /* ================= Kotta (SVG) ================= */
+  const LS = 10;                      // vonalköz
+  const CLEF_W = 52;
+  const TREBLE_BOTTOM = 30;           // E4 diatonikus száma (alsó vonal)
+  const BASS_BOTTOM = 18;             // G2 diatonikus száma (alsó vonal)
+  const LABEL_LH = 13;
+
+  const TREBLE_CLEF = "M13.5 31 C9.5 31 9.5 25 13.5 24.2 C19.5 23.4 21.5 31.5 15.5 35.2 C8.5 39.2 2.6 31 7 24 C11 17.5 19.5 10.5 18.8 -1 C18.4 -8.5 13 -8.5 12.2 -1.5 C11.4 6 14.2 30 15.2 48 C15.6 54.5 9.5 55.5 8.5 50.5";
+  const BASS_CLEF = "M5.5 11 C4 2.5 22 0 22.5 12 C23 24 13 32 3.5 38.5";
+
+  function staffY(diatonic, bottomDiatonic) { return 40 - (diatonic - bottomDiatonic) * (LS / 2); }
+
+  function labelWidth(note) { return note.name.length * 6.6 + (note.finger != null ? 6 : 0); }
+
+  function renderScore() {
+    const wrap = $("#scoreWrap"), svg = $("#score");
+    const cw = wrap.clientWidth, ch = wrap.clientHeight;
+    const tl = state.timeline;
+    if (!cw || !ch || !tl || !tl.steps.length) { svg.innerHTML = ""; return; }
+
+    const hands = settings.hands;
+    const showT = hands !== "left", showB = hands !== "right";
+    const curIndex = viewStepIndex();
+    const curStep = tl.steps[curIndex];
+    const curBar = curStep.bar;
+    const isCur = (s) => s.index === curIndex && !(state.session.finished && !Player.demoActive);
+
+    // --- függőleges elrendezés (a teljes dalra számolva, hogy ne ugráljon) ---
+    const linesPer = { right: 1, left: 1 };
+    let lowRight = 40, highLeft = 0;
+    for (const s of tl.steps) {
+      for (const hand of ["right", "left"]) {
+        const ns = s.notes.filter((n) => n.hand === hand);
+        linesPer[hand] = Math.max(linesPer[hand], ns.length);
+      }
+      for (const n of s.notes) {
+        if (n.hand === "right") lowRight = Math.max(lowRight, staffY(n.pitch.diatonic, TREBLE_BOTTOM));
+        else highLeft = Math.min(highLeft, staffY(n.pitch.diatonic, BASS_BOTTOM));
+      }
+    }
+    const hasTopRow = tl.chordSlots.length > 0;
+    let y = 4;
+    const chordY = y + 12;
+    if (hasTopRow) y += 18;
+    let TT = null, tLab = null, BT = null, bLab = null;
+    if (showT) {
+      TT = y + 26;
+      tLab = TT + Math.max(54, lowRight + 18);
+      y = tLab + (linesPer.right - 1) * LABEL_LH + 6;
+    }
+    if (showB) {
+      BT = y + Math.max(20, 14 - highLeft);
+      bLab = BT + 56;
+      y = bLab + (linesPer.left - 1) * LABEL_LH + 6;
+    }
+    const H = y + 2;
+
+    // --- vízszintes elrendezés: aktuális ütem + 1–2 következő ---
+    const s0 = Math.min(1.6, Math.max(0.55, ch / H));
+    const avail = cw / s0 - CLEF_W - 8;
+    const slotWidth = (s) => {
+      const minW = Math.max(24, ...s.notes.map(labelWidth)) + 6;
+      return Math.max(minW, s.dur * 30);
+    };
+    const barNatural = (b) => 18 + tl.bars[b].steps.reduce((sum, i) => sum + slotWidth(tl.steps[i]), 0);
+    // Az aktuális ütem mellett a következő is látsszon, ha így is olvasható marad (≥ 0,85 px/egység);
+    // harmadik ütem csak akkor, ha kicsinyítés nélkül is elfér (pl. fekvő mód).
+    const MIN_SCALE = 0.85;
+    let n = 1, natural = barNatural(curBar);
+    if (curBar + 1 < tl.barCount) {
+      const two = natural + barNatural(curBar + 1);
+      if (cw / (CLEF_W + two + 8) >= MIN_SCALE) { natural = two; n = 2; }
+    }
+    if (n === 2 && curBar + 2 < tl.barCount && natural + barNatural(curBar + 2) <= avail) {
+      natural += barNatural(curBar + 2);
+      n = 3;
+    }
+    const nextSlot = n === 1 && curBar + 1 < tl.barCount ? tl.chordSlots.find((c) => c.bar === curBar + 1) : null;
+    const hintW = nextSlot ? nextSlot.name.length * 6.5 + 26 : 0;
+    const stretch = Math.min(3.5, Math.max(1, (avail - hintW) / natural));
+    const W = Math.max(CLEF_W + natural * stretch + hintW + 8, cw / s0);
+    const H2 = Math.max(H, ch / s0);
+    const yOff = (H2 - H) / 2;
+
+    const out = [];
+    const staves = [];
+    if (showT) staves.push({ hand: "right", top: TT, bottom: TREBLE_BOTTOM, labelY: tLab });
+    if (showB) staves.push({ hand: "left", top: BT, bottom: BASS_BOTTOM, labelY: bLab });
+    const sysTop = staves[0].top, sysBottom = staves[staves.length - 1].top + 40;
+
+    // kulcsok, ütemmutató (a vonalak a végén, amikor már ismert a rendszer hossza)
+    for (const st of staves) {
+      if (st.hand === "right") {
+        out.push(`<g transform="translate(5 ${st.top})"><path class="sc-clef" d="${TREBLE_CLEF}"/><circle class="sc-clef-dot" cx="10" cy="50.5" r="2.6"/></g>`);
+      } else {
+        out.push(`<g transform="translate(6 ${st.top})"><path class="sc-clef" d="${BASS_CLEF}" stroke-width="2.6"/><circle class="sc-clef-dot" cx="6.5" cy="10.5" r="3.4"/><circle class="sc-clef-dot" cx="27" cy="5" r="1.8"/><circle class="sc-clef-dot" cx="27" cy="15" r="1.8"/></g>`);
+      }
+      out.push(`<text class="sc-ts" x="${CLEF_W - 10}" y="${st.top + 17}" text-anchor="middle">${tl.meter[0]}</text>`);
+      out.push(`<text class="sc-ts" x="${CLEF_W - 10}" y="${st.top + 37}" text-anchor="middle">${tl.meter[1]}</text>`);
+    }
+    out.push(`<line class="sc-bar" x1="4" x2="4" y1="${sysTop}" y2="${sysBottom}"/>`);
+
+    // ütemek és hangok
+    const bands = [];
+    let x = CLEF_W;
+    for (let b = curBar; b < curBar + n; b++) {
+      const bar = tl.bars[b];
+      out.push(`<text class="sc-barno" x="${x + 4}" y="${sysTop - 6}">${b + 1}</text>`);
+      let sx = x + 12 * stretch;
+      for (const si of bar.steps) {
+        const step = tl.steps[si];
+        const w = slotWidth(step) * stretch;
+        const nx = sx + 12;
+        const cur = isCur(step);
+        if (cur) {
+          const handsHere = new Set(step.notes.map((nn) => nn.hand));
+          const kind = handsHere.size > 1 ? "both" : [...handsHere][0];
+          bands.push(`<rect class="sc-band sc-band-${kind}" x="${nx - 13}" y="${sysTop - 14}" width="26" height="${sysBottom - sysTop + 28}" rx="8"/>`);
+        }
+        if (step.chord && Math.abs(step.chord.start - step.start) < 1e-6 && hasTopRow) {
+          const curChord = currentStep() && currentStep().chord === step.chord;
+          out.push(`<text class="sc-chord${curChord ? " cur" : ""}" x="${nx - 6}" y="${chordY}">${esc(step.chord.name)}</text>`);
+        }
+        for (const st of staves) {
+          const notes = step.notes.filter((nn) => nn.hand === st.hand);
+          if (notes.length) out.push(drawNotes(notes, nx, st, step, cur));
+        }
+        if (step.accent && showT) out.push(`<path d="M${nx - 5} ${TT - 16} L${nx + 5} ${TT - 13} L${nx - 5} ${TT - 10}" fill="none" stroke="currentColor" stroke-width="1.4" class="${cur ? "n-cur-right" : "n-fut"}"/>`);
+        sx += w;
+      }
+      x = sx + 6 * stretch;
+      const last = b === tl.barCount - 1;
+      out.push(`<line class="sc-bar" x1="${x}" x2="${x}" y1="${sysTop}" y2="${sysBottom}"/>`);
+      if (last) out.push(`<line class="sc-bar" x1="${x + 4}" x2="${x + 4}" y1="${sysTop}" y2="${sysBottom}" stroke-width="3.5"/>`);
+    }
+    const staffEnd = x + (tl.bars[curBar + n - 1].index === tl.barCount - 1 ? 6 : 0);
+    for (const st of staves) {
+      for (let i = 0; i < 5; i++) out.unshift(`<line class="sc-line" x1="4" x2="${staffEnd}" y1="${st.top + i * LS}" y2="${st.top + i * LS}"/>`);
+    }
+    if (nextSlot) out.push(`<text class="sc-next" x="${x + 10}" y="${sysTop + 4}">→ ${esc(nextSlot.name)}</text>`);
+
+    svg.setAttribute("viewBox", `0 ${-yOff} ${W} ${H2}`);
+    svg.setAttribute("preserveAspectRatio", "xMinYMid meet");
+    svg.innerHTML = bands.join("") + out.join("");
+    const desc = currentStep() ? currentStep().notes.map((nn) => nn.name).join(", ") : "";
+    svg.setAttribute("aria-label", `Kotta, ${curBar + 1}. ütem. Következő: ${desc}`);
+  }
+
+  function drawNotes(notes, x, staff, step, cur) {
+    const satisfied = Player.demoActive ? [] : state.session.satisfied;
+    const idx = viewStepIndex();
+    const sorted = notes.slice().sort((a, b) => b.pitch.diatonic - a.pitch.diatonic);
+    const dur = sorted[0].dur;
+    const parts = [];
+    const ys = sorted.map((n) => staff.top + staffY(n.pitch.diatonic, staff.bottom));
+    const colorOf = (n) => {
+      if (state.session.finished && !Player.demoActive) return "n-past";
+      if (cur) return satisfied.includes(n.midi) ? "n-done" : `n-cur-${n.hand}`;
+      return step.index < idx ? "n-past" : "n-fut";
+    };
+    const groupCls = colorOf(sorted[0]);
+    const r = cur ? 1.12 : 1;
+
+    sorted.forEach((n, i) => {
+      const ny = ys[i];
+      const cls = colorOf(n);
+      const rel = ny - staff.top;
+      // pótvonalak
+      for (let ly = 50; ly <= rel + 0.1; ly += LS) parts.push(`<line class="${cls}" stroke="currentColor" stroke-width="1.2" x1="${x - 10}" x2="${x + 10}" y1="${staff.top + ly}" y2="${staff.top + ly}"/>`);
+      for (let ly = -10; ly >= rel - 0.1; ly -= LS) parts.push(`<line class="${cls}" stroke="currentColor" stroke-width="1.2" x1="${x - 10}" x2="${x + 10}" y1="${staff.top + ly}" y2="${staff.top + ly}"/>`);
+      const hollow = dur >= 2;
+      parts.push(`<g class="${cls}"><ellipse cx="${x}" cy="${ny}" rx="${6 * r}" ry="${4.4 * r}" transform="rotate(-20 ${x} ${ny})" ${hollow ? 'fill="none" stroke="currentColor" stroke-width="1.8"' : 'fill="currentColor"'}/></g>`);
+      if (n.pitch.alter) parts.push(`<text class="${cls}" fill="currentColor" x="${x - 17}" y="${ny + 5}" font-size="15">${n.pitch.alter > 0 ? "♯" : "♭"}</text>`);
+      if (dur === 1.5 || dur === 3 || dur === 0.75) {
+        const dy = Math.abs(rel % LS) < 0.1 ? ny - 5 : ny;
+        parts.push(`<circle class="${cls}" fill="currentColor" cx="${x + 10}" cy="${dy}" r="1.8"/>`);
+      }
+    });
+
+    if (dur < 4) {
+      const top = ys[0], bottom = ys[ys.length - 1];
+      const mid = staff.top + 20;
+      const up = (top + bottom) / 2 >= mid;
+      const sx = up ? x + 5.6 : x - 5.6;
+      const y1 = up ? bottom : top;
+      const y2 = up ? top - 32 : bottom + 32;
+      parts.push(`<line class="${groupCls}" stroke="currentColor" stroke-width="1.4" x1="${sx}" x2="${sx}" y1="${y1}" y2="${y2}"/>`);
+      if (dur <= 0.75) {
+        const d = up ? `M${sx} ${y2} q 9 7 6 17` : `M${sx} ${y2} q 9 -7 6 -17`;
+        parts.push(`<path class="${groupCls}" d="${d}" fill="none" stroke="currentColor" stroke-width="1.7"/>`);
+      }
+    }
+
+    // címkék: hangnév + ujjszám (felülről lefelé)
+    sorted.forEach((n, i) => {
+      const cls = colorOf(n);
+      parts.push(`<text class="sc-label ${cls}" fill="currentColor" x="${x}" y="${staff.labelY + i * LABEL_LH}" text-anchor="middle">${esc(n.name)}${n.finger != null ? `<tspan class="f" dx="1" dy="-4.5">${n.finger}</tspan>` : ""}</text>`);
+    });
+    return parts.join("");
+  }
+
+  /* ================= Lapok (súgó, metronóm, siker, bevezető) ================= */
+  let sheetCloseHandler = null;
+  function openSheet(html, { onClose, label } = {}) {
+    const overlay = $("#overlay");
+    overlay.innerHTML = `<div class="backdrop" data-close></div>
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(label || "")}"><div class="grab" aria-hidden="true"></div>${html}</div>`;
+    overlay.hidden = false;
+    $("#toast").classList.add("hide");
+    sheetCloseHandler = onClose || null;
+    const first = overlay.querySelector(".sheet button, .sheet input");
+    if (first) first.focus({ preventScroll: true });
+    return overlay.querySelector(".sheet");
+  }
+  function closeSheet() {
+    const overlay = $("#overlay");
+    if (overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.innerHTML = "";
+    const h = sheetCloseHandler;
+    sheetCloseHandler = null;
+    if (h) h();
+  }
+
+  function miniKeyboard(marks) {
+    // 1 oktáv + C: fehérek C..C, feketék a szokásos helyen; marks: {C:'r', F:'l'}
+    const whites = ["C", "D", "E", "F", "G", "A", "H", "C"];
+    const kw = 38, h = 110;
+    let s = `<svg class="mini-kb" viewBox="0 0 ${whites.length * kw + 2} ${h + 2}" aria-hidden="true">`;
+    whites.forEach((name, i) => {
+      const fill = marks[name] && (i < 7 || name === "C") ? (marks[name] === "r" ? "var(--rh)" : "var(--lh)") : "var(--white-key)";
+      const ink = fill === "var(--white-key)" ? "#3a3f4b" : "#fff";
+      s += `<rect x="${1 + i * kw}" y="1" width="${kw - 2}" height="${h}" rx="4" fill="${fill}" stroke="var(--white-key-edge)"/>`;
+      s += `<text x="${1 + i * kw + kw / 2 - 1}" y="${h - 10}" text-anchor="middle" font-size="15" font-weight="700" fill="${ink}">${name}</text>`;
+    });
+    [1, 2, 4, 5, 6].forEach((i) => {
+      s += `<rect x="${1 + i * kw - 12}" y="1" width="22" height="${h * 0.6}" rx="3" fill="var(--black-key)"/>`;
+    });
+    return s + "</svg>";
+  }
+
+  const HELP_TIPS = `
+    <h3>Hol a C?</h3>
+    <p>A <b>C</b> mindig a <b>kettes</b> fekete csoport bal oldalán van, az <b>F</b> a <b>hármas</b> fekete csoport bal oldalán.</p>
+    ${miniKeyboard({ C: "r", F: "l" })}
+    <h3>Középső C</h3>
+    <p>A kottában a violinkulcs alatti <b>első pótvonal</b>. A billentyűn kis kék pont jelöli.</p>
+    <h3>Ujjszámozás</h3>
+    <p>Mindkét kézen: hüvelyk = <b>1</b>, mutató = 2, középső = 3, gyűrűs = 4, kisujj = <b>5</b>.</p>
+    <h3>Színek</h3>
+    <div class="legend">
+      <span class="sw" style="background:var(--rh)">J</span><span>jobb kéz következő hangja</span>
+      <span class="sw" style="background:var(--lh)">B</span><span>bal kéz következő hangja</span>
+      <span class="sw" style="background:var(--ok)">✓</span><span>jó billentyű</span>
+      <span class="sw" style="background:var(--bad)">✕</span><span>másik billentyű – semmi gond, próbáld újra</span>
+    </div>`;
+
+  function openHelp() {
+    const sheet = openSheet(`
+      <h2>Súgó</h2>
+      ${HELP_TIPS}
+      <h3>Így haladj</h3>
+      <ol>
+        <li>Kezdd az Örömódával, <b>jobb kézzel</b>, a <b>Következő</b> gombbal lépve.</li>
+        <li>Ha megy, kapcsold be a <b>Gyakorlást</b> és a metronómot 60-as tempón.</li>
+        <li>Utána bal kéz külön, majd mindkettő.</li>
+        <li>Akkordmódban az akkordváltásokat gyakorold; a dallamot a megvásárolt kottából tedd rá.</li>
+      </ol>
+      <h3>Beállítások</h3>
+      <div class="setting"><span>Hangnevek a billentyűkön</span><button class="chip" id="setLabels" aria-pressed="${settings.keyLabels}"><span class="sw"></span>${settings.keyLabels ? "Be" : "Ki"}</button></div>
+      <div class="setting"><span>Megjelenés</span>
+        <div class="seg" role="radiogroup" aria-label="Megjelenés" id="setTheme">
+          ${[["auto", "Auto"], ["light", "Világos"], ["dark", "Sötét"]].map(([v, l]) => `<button role="radio" data-theme="${v}" aria-checked="${settings.theme === v}">${l}</button>`).join("")}
+        </div>
+      </div>
+      <div class="setting"><span>Bevezető</span><button class="btn" id="setIntro">Újra megnézem</button></div>
+      <div class="setting"><span>Haladás törlése</span><button class="btn" id="setReset">Törlés</button></div>
+      <p class="muted">Tipp: iPhone-on a néma kapcsoló elnémíthatja a hangot. Számítógépen a Z–M és Q–U sorral is játszhatsz.</p>
+      <div class="actions"><button class="btn primary" data-close>Bezárás</button></div>`, { label: "Súgó" });
+
+    sheet.querySelector("#setLabels").addEventListener("click", (e) => {
+      settings.keyLabels = !settings.keyLabels;
+      saveSettings();
+      e.currentTarget.setAttribute("aria-pressed", String(settings.keyLabels));
+      e.currentTarget.lastChild.textContent = settings.keyLabels ? "Be" : "Ki";
+      $("#keys").classList.toggle("no-labels", !settings.keyLabels);
+    });
+    sheet.querySelector("#setTheme").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      settings.theme = b.dataset.theme;
+      saveSettings();
+      applyTheme();
+      sheet.querySelectorAll("#setTheme button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+      if (state.screen === "practice") renderScore();
+    });
+    sheet.querySelector("#setIntro").addEventListener("click", () => { closeSheet(); openOnboarding(); });
+    sheet.querySelector("#setReset").addEventListener("click", (e) => {
+      if (e.currentTarget.dataset.confirm !== "1") {
+        e.currentTarget.dataset.confirm = "1";
+        e.currentTarget.textContent = "Biztos? Koppints újra";
+        return;
+      }
+      Progress.reset();
+      e.currentTarget.textContent = "Törölve";
+      e.currentTarget.disabled = true;
+      if (state.screen === "home") renderHome();
+    });
+  }
+
+  function openMetronome() {
+    const bpb = state.timeline ? state.timeline.bpb : 4;
+    const meter = state.timeline ? state.timeline.meter : [4, 4];
+    const sheet = openSheet(`
+      <h2>Metronóm</h2>
+      <div class="metro-bpm">
+        <button class="btn" id="mMinus" aria-label="Lassabb (−5)">−</button>
+        <div><output id="mBpm">${settings.tempo}</output><small>BPM · ${meter[0]}/${meter[1]}</small></div>
+        <button class="btn" id="mPlus" aria-label="Gyorsabb (+5)">+</button>
+      </div>
+      <input type="range" id="mTempo" min="40" max="120" step="1" value="${settings.tempo}" aria-label="Tempó">
+      <div class="metro-beats" id="metroBeats" aria-hidden="true">${Array.from({ length: bpb }, (_, i) => `<i class="${i === 0 ? "first" : ""}"></i>`).join("")}</div>
+      <div class="setting"><span>Metronóm</span><button class="chip" id="mOn" aria-pressed="${settings.metronome}"><span class="sw"></span>${settings.metronome ? "Be" : "Ki"}</button></div>
+      <div class="setting"><span>1 ütem visszaszámlálás lejátszás előtt</span><button class="chip" id="mCount" aria-pressed="${settings.countIn}"><span class="sw"></span>${settings.countIn ? "Be" : "Ki"}</button></div>
+      <div class="setting"><span>Hangerő</span><input type="range" id="mVol" min="0" max="1" step="0.05" value="${settings.volume}" style="max-width:200px" aria-label="Metronóm hangereje"></div>
+      <div class="actions"><button class="btn primary" data-close>Kész</button></div>`, { label: "Metronóm" });
+
+    const sync = () => {
+      sheet.querySelector("#mBpm").textContent = settings.tempo;
+      sheet.querySelector("#mTempo").value = settings.tempo;
+      renderControls();
+    };
+    sheet.querySelector("#mMinus").addEventListener("click", () => { setTempo(settings.tempo - 5); sync(); });
+    sheet.querySelector("#mPlus").addEventListener("click", () => { setTempo(settings.tempo + 5); sync(); });
+    sheet.querySelector("#mTempo").addEventListener("input", (e) => { setTempo(Number(e.target.value)); sync(); });
+    sheet.querySelector("#mOn").addEventListener("click", (e) => {
+      toggleMetronome();
+      e.currentTarget.setAttribute("aria-pressed", String(settings.metronome));
+      e.currentTarget.lastChild.textContent = settings.metronome ? "Be" : "Ki";
+    });
+    sheet.querySelector("#mCount").addEventListener("click", (e) => {
+      settings.countIn = !settings.countIn;
+      saveSettings();
+      e.currentTarget.setAttribute("aria-pressed", String(settings.countIn));
+      e.currentTarget.lastChild.textContent = settings.countIn ? "Be" : "Ki";
+    });
+    sheet.querySelector("#mVol").addEventListener("input", (e) => {
+      settings.volume = Number(e.target.value);
+      saveSettings();
+    });
+  }
+
+  function showSuccess() {
+    if (state.screen !== "practice") return;
+    const tl = state.timeline;
+    const total = tl.bars.filter((b) => b.steps.length).length;
+    const clean = new Set(state.session.cleanBars).size;
+    const songIndex = validSongs.indexOf(state.song);
+    const tip = suggestNext({
+      cleanBars: clean, totalBars: total, hands: settings.hands, practice: settings.practice,
+      tempo: settings.tempo, songIndex, songCount: validSongs.length,
+    });
+    const perfect = clean === total;
+    const sheet = openSheet(`
+      <div class="success">
+        <svg viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30" fill="none" stroke-width="5"/><path d="M23 37l9 9 17-19" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h2>${perfect ? "Hibátlan! Szép munka." : "Végigértél!"}</h2>
+        <p class="stat">${clean} / ${total} ütem hibátlan</p>
+        <p class="muted">${esc(state.song.title)} · ${MODE_LABELS[state.mode]} · ${HAND_LABELS[settings.hands]} · ${settings.tempo} BPM</p>
+        <p>${esc(tip.text)}</p>
+        <div class="actions">
+          <button class="btn" id="sAgain">Még egyszer</button>
+          ${tip.action && tip.action.kind !== "retry" ? `<button class="btn primary" id="sNext">${esc(tip.label)}</button>` : ""}
+          <button class="btn" id="sHome">Kezdőlap</button>
+        </div>
+      </div>`, { label: "Eredmény" });
+    sheet.querySelector("#sAgain").addEventListener("click", () => { closeSheet(); restart(); });
+    sheet.querySelector("#sHome").addEventListener("click", () => { closeSheet(); showScreen("home"); });
+    const next = sheet.querySelector("#sNext");
+    if (next) next.addEventListener("click", () => { closeSheet(); applySuggestion(tip.action); });
+  }
+
+  function applySuggestion(action) {
+    if (action.kind === "tempo") { setTempo(action.value); restart(); }
+    else if (action.kind === "practice") { settings.practice = true; saveSettings(); restart(); }
+    else if (action.kind === "hands") { setHands(action.value); }
+    else if (action.kind === "song") { openSong(validSongs[action.index].id); }
+    else restart();
+  }
+
+  const ONBOARDING = [
+    { title: "Hol a C?", body: `<p>Keresd a <b>két fekete billentyűből</b> álló csoportot: a közvetlenül bal oldali fehér a <b>C</b>. A hármas csoport bal oldalán az <b>F</b> van.</p>${miniKeyboard({ C: "r", F: "l" })}` },
+    { title: "Ujjszámozás", body: `<p>Mindkét kezeden: a hüvelyk az <b>1</b>, a kisujj az <b>5</b>. A kottában minden hang alatt ott a neve és az ujjszám.</p><div class="finger-row" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>` },
+    { title: "Kövesd a fényt", body: `<p>A soron következő billentyű kivilágít – a kottában ugyanilyen színű a hang.</p>
+      <div class="legend"><span class="sw" style="background:var(--rh)">J</span><span>jobb kéz</span><span class="sw" style="background:var(--lh)">B</span><span>bal kéz</span><span class="sw" style="background:var(--ok)">✓</span><span>eltaláltad</span><span class="sw" style="background:var(--bad)">✕</span><span>másik billentyű – nyugi, próbáld újra</span></div>` },
+  ];
+
+  function openOnboarding(i = 0) {
+    const step = ONBOARDING[i];
+    const last = i === ONBOARDING.length - 1;
+    const sheet = openSheet(`
+      <h2>${step.title}</h2>${step.body}
+      <div class="ob-dots" aria-hidden="true">${ONBOARDING.map((_, j) => `<i class="${j === i ? "on" : ""}"></i>`).join("")}</div>
+      <div class="actions">
+        <button class="btn" id="obSkip">${last ? "Vissza" : "Kihagyom"}</button>
+        <button class="btn primary" id="obNext">${last ? "Kezdjük!" : "Tovább"}</button>
+      </div>`, { label: `Bevezető ${i + 1}/3`, onClose: () => Store.set("onboarded", true) });
+    sheet.querySelector("#obNext").addEventListener("click", () => (last ? closeSheet() : openOnboarding(i + 1)));
+    sheet.querySelector("#obSkip").addEventListener("click", () => (last ? openOnboarding(i - 1) : closeSheet()));
+  }
+
+  /* ================= Műveletek ================= */
+  function setTempo(v) {
+    settings.tempo = Math.min(120, Math.max(40, Math.round(v)));
+    saveSettings();
+    Player.setTempo(settings.tempo);
+  }
+
+  function setHands(h) {
+    const bar = currentBar();
+    settings.hands = h;
+    saveSettings();
+    rebuild(bar);
+    renderPractice();
+  }
+
+  function restart() {
+    if (Player.demoActive) Player.stopDemo();
+    state.demoStep = -1;
+    state.countIn = 0;
+    state.session = sessionInit(0);
+    renderPractice();
+  }
+
+  function togglePlay() {
+    Sound.ensure();
+    state.lastInteraction = Date.now();
+    if (Player.demoActive) {
+      const idx = state.demoStep >= 0 ? state.demoStep : state.session.stepIndex;
+      Player.stopDemo();
+      state.demoStep = -1;
+      state.countIn = 0;
+      state.session = sessionInit(idx);
+    } else {
+      const from = state.session.finished ? 0 : state.session.stepIndex;
+      const firstOfBar = state.timeline.bars[state.timeline.steps[from].bar].steps[0];
+      state.session = sessionInit(firstOfBar);
+      state.demoStep = firstOfBar;
+      Player.startDemo({ timeline: state.timeline, fromIndex: firstOfBar, countIn: settings.countIn });
+    }
+    renderPractice();
+  }
+
+  function toggleMetronome() {
+    Sound.ensure();
+    settings.metronome = !settings.metronome;
+    saveSettings();
+    if (settings.metronome) Player.startMetronome();
+    else Player.stopIfIdle();
+    renderControls();
+  }
+
+  /* ================= Eseménykezelők ================= */
+  function bindEvents() {
+    document.addEventListener("click", (e) => {
+      const open = e.target.closest("[data-open]");
+      if (open) { Sound.ensure(); openSong(open.dataset.open); return; }
+      if (e.target.closest("[data-close]")) closeSheet();
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+
+    $("#homeHelp").addEventListener("click", openHelp);
+    $("#helpBtn").addEventListener("click", openHelp);
+    $("#backBtn").addEventListener("click", () => showScreen("home"));
+    $("#songSelect").addEventListener("change", (e) => openSong(e.target.value));
+    $("#modeSeg").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || b.disabled || b.dataset.mode === state.mode) return;
+      const bar = currentBar();
+      state.mode = b.dataset.mode;
+      state.arpeggio = state.arpeggio && hasArpeggio(state.song, state.mode);
+      saveSongPrefs();
+      rebuild(bar);
+      renderPractice();
+    });
+    $("#arpBtn").addEventListener("click", () => {
+      const bar = currentBar();
+      state.arpeggio = !state.arpeggio;
+      saveSongPrefs();
+      rebuild(bar);
+      renderPractice();
+    });
+    $("#handSeg").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b && b.dataset.hands !== settings.hands) setHands(b.dataset.hands);
+    });
+    $("#practiceBtn").addEventListener("click", () => {
+      settings.practice = !settings.practice;
+      saveSettings();
+      showToast(settings.practice ? "Gyakorlás: megvárom, amíg leütöd." : "Lépésenként: a Következő gombbal haladsz.");
+      if (settings.practice && state.session.stepDone && !state.session.finished) dispatch({ type: "next" });
+      else renderControls();
+    });
+    $("#playBtn").addEventListener("click", togglePlay);
+    $("#restartBtn").addEventListener("click", restart);
+    $("#nextBtn").addEventListener("click", () => {
+      Sound.ensure();
+      state.lastInteraction = Date.now();
+      if (Player.demoActive) togglePlay();
+      if (state.session.finished) { restart(); return; }
+      dispatch({ type: "next" });
+      const step = currentStep();
+      if (step && !state.session.finished) step.notes.forEach((n) => Sound.note(n.midi, null, 0.5, 0.45));
+    });
+    $("#metroBtn").addEventListener("click", toggleMetronome);
+    $("#tempoBtn").addEventListener("click", openMetronome);
+    $("#tempo").addEventListener("input", (e) => {
+      setTempo(Number(e.target.value));
+      $("#tempoVal").textContent = settings.tempo;
+    });
+
+    new ResizeObserver(() => { if (state.screen === "practice") renderScore(); }).observe($("#scoreWrap"));
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (state.screen === "practice") renderScore(); });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && Player.running) {
+        if (Player.demoActive) togglePlay();
+        settings.metronome = false;
+        Player.stop();
+        renderPractice();
+      }
+    });
+
+    // Napi gyakorlási idő: csak aktív használat számít.
+    setInterval(() => {
+      if (state.screen === "practice" && !document.hidden && (Player.running || Date.now() - state.lastInteraction < 30000)) {
+        PracticeLog.add(5);
+      }
+    }, 5000);
+  }
+
+  /* ================= Indítás ================= */
+  applyTheme();
+  settings.metronome = false; // a metronóm sosem indul magától
+  Player.init({
+    beatsPerBar: () => (state.timeline ? state.timeline.bpb : 4),
+    onBeat, onDemoStep, onDemoEnd,
+  });
+  Player.setTempo(settings.tempo);
+  setupKeyInput();
+  bindEvents();
+  showScreen("home");
+  if (!Store.get("onboarded", false)) openOnboarding();
+})();
+</script>
+</body>
+</html>
