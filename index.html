@@ -26,6 +26,13 @@
      Akkordmód ütemei: "Fism" = egész ütem, "G:h C:h" = két fél ütem.
      Minden ütem hosszát induláskor ellenőrizzük (lásd validateSong).
      =================================================================== -->
+<script>
+  // Indítási hiba esetén a kezdőlapon jelenjen meg az ok (telefonon nincs konzol).
+  window.addEventListener("error", function (e) {
+    var el = document.getElementById("bootError");
+    if (el && document.getElementById("noScript")) { el.hidden = false; el.textContent = "Hiba: " + (e.message || e); }
+  });
+</script>
 <script id="songs">
 const SONGS = [
   {
@@ -588,6 +595,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
   padding: 16px; margin-bottom: 12px; border: 1px solid var(--line);
 }
 .today { display: flex; align-items: center; gap: 16px; }
+.today:empty { display: none; }
 .today h2, .song-card h2 { font-size: 17px; margin: 0 0 2px; }
 .today p { margin: 0; color: var(--muted); font-size: 14px; }
 .ring { width: 64px; height: 64px; flex: none; }
@@ -812,7 +820,14 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
       </div>
       <div class="card today" id="todayCard"></div>
       <div class="section-title">Dalok</div>
-      <div id="songList"></div>
+      <div id="songList">
+        <!-- Ezt a JavaScript lecseréli; ha nem fut (pl. fájlelőnézet), ez marad látható. -->
+        <div class="card" id="noScript">
+          <h2 style="font-size:17px;margin:0 0 6px">Az alkalmazás nem indult el</h2>
+          <p style="margin:0;color:var(--muted)">Ez a nézet nem futtat JavaScriptet (pl. fájlelőnézet). Nyisd meg a fájlt böngészőben (Safari, Chrome), majd „Hozzáadás a kezdőképernyőhöz”.</p>
+          <p id="bootError" style="margin:8px 0 0;color:var(--bad);font-size:13px" hidden></p>
+        </div>
+      </div>
     </div>
   </section>
 
