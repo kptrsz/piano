@@ -17,6 +17,8 @@ const { SONGS, PianoCore: core } = vm.runInThisContext(
   `(() => {${scriptById("songs")}\n${scriptById("core")}\nreturn { SONGS, PianoCore: globalThis.PianoCore };})()`
 );
 const song = (id) => SONGS.find((s) => s.id === id);
+const mainSongs = SONGS.filter((s) => !s.kids);
+const kidSongs = SONGS.filter((s) => s.kids);
 const names = (step) => step.notes.map((n) => n.name);
 const pressAll = (session, tl, opts) => {
   const step = tl.steps[session.stepIndex];
@@ -62,7 +64,8 @@ test("hosszjelölések és hangjelek", () => {
 });
 
 test("minden dal adatai érvényesek (ütemhosszak, akkordok)", () => {
-  assert.equal(SONGS.length, 3);
+  assert.equal(mainSongs.length, 3);
+  assert.equal(kidSongs.length, 4);
   for (const s of SONGS) assert.deepEqual(core.validateSong(s), [], s.title);
 });
 
@@ -147,7 +150,7 @@ test("szerzői jogvédett dalokhoz nincs dallam, csak megjegyzés", () => {
 });
 
 test("billentyűzet: minden dal elfér 2 oktávon (C3–H4)", () => {
-  for (const s of SONGS) assert.deepEqual(core.keyboardRange(s), { low: 48, high: 71 }, s.title);
+  for (const s of mainSongs) assert.deepEqual(core.keyboardRange(s), { low: 48, high: 71 }, s.title);
 });
 
 test("billentyűzet: a tartomány bővül, ha a dal kilóg", () => {
@@ -246,4 +249,46 @@ test("javaslat: fokozatos haladás", () => {
   assert.equal(core.suggestNext({ ...base, practice: true, hands: "both", tempo: 120, songIndex: 2 }).action, null);
   assert.deepEqual(core.suggestNext({ ...base, cleanBars: 10 }).action, { kind: "tempo", value: 50 });
   assert.equal(core.suggestNext({ ...base, cleanBars: 10, tempo: 50 }).action.kind, "retry");
+});
+
+test("gyerekdalok: egy oktávon (C4–C5) elférnek, csak jobb kéz", () => {
+  for (const s of kidSongs) {
+    assert.deepEqual(core.kidsRange(s), { low: 60, high: 72 }, s.title);
+    assert.deepEqual(core.availableModes(s), ["melody"], s.title);
+    assert.equal(s.modes.melody.left, undefined, s.title);
+    assert.ok(s.picture, s.title);
+  }
+});
+
+test("gyerekdalok: a Hot Cross Buns csak 3 hangot használ", () => {
+  const tl = core.buildTimeline(song("buns"), { mode: "melody", hands: "right" });
+  assert.deepEqual([...new Set(tl.events.map((e) => e.name))].sort(), ["C", "D", "E"]);
+});
+
+test("Boci, boci tarka: dallam és szótagok párban", () => {
+  const tl = core.buildTimeline(song("boci"), { mode: "melody", hands: "right" });
+  assert.equal(tl.barCount, 8);
+  assert.equal(tl.bpb, 2);
+  const line = (from, to) => tl.steps.filter((s) => s.bar >= from && s.bar <= to).map((s) => s.notes[0]);
+  assert.deepEqual(line(0, 1).map((n) => n.name).join(" "), "C E C E G G");
+  assert.deepEqual(line(4, 5).map((n) => n.name).join(" "), "C H A G F A");
+  assert.deepEqual(line(6, 7).map((n) => n.name).join(" "), "G F E D C C");
+  assert.deepEqual(line(0, 1).map((n) => n.lyric), ["Bo-", "ci", "bo-", "ci", "tar-", "ka,"]);
+  assert.equal(line(7, 7).at(-1).lyric, "ni.");
+});
+
+test("Twinkle: 12 ütem, a vége C", () => {
+  const tl = core.buildTimeline(song("star"), { mode: "melody", hands: "right" });
+  assert.equal(tl.barCount, 12);
+  assert.equal(tl.steps.at(-1).notes[0].pitch.spelling, "C4");
+});
+
+test("hibás szótagszám kiderül", () => {
+  const broken = {
+    id: "y", title: "Rossz szöveg", kids: true, meter: [2, 4],
+    modes: { melody: { right: ["C4 D4"], lyrics: ["egy"] } },
+  };
+  const errors = core.validateSong(broken);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /1\. ütem 1 szótag, de 2 hang/);
 });

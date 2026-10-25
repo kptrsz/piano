@@ -24,6 +24,9 @@
        q = negyed (alapértelmezés), 8 = nyolcad.
      Ujjszám: ha nincs megadva a hangnál, a dal `fingers` táblájából jön.
      Akkordmód ütemei: "Fism" = egész ütem, "G:h C:h" = két fél ütem.
+     Gyerekdal: `kids: true` + `picture` (kép a kártyán); a `lyrics` ütemenként
+       a jobb kéz hangjaihoz tartozó szótagokat adja szóközzel elválasztva
+       ("Bo- ci bo- ci"); a szótagszámnak egyeznie kell a hangok számával.
      Minden ütem hosszát induláskor ellenőrizzük (lásd validateSong).
      =================================================================== -->
 <script>
@@ -127,6 +130,78 @@ const SONGS = [
       },
     },
   },
+
+  /* ---------- Gyerekdalok (jobb kéz, C-pozíció, színes billentyűk) ---------- */
+  {
+    id: "buns",
+    kids: true,
+    picture: "🍞",
+    title: "Hot Cross Buns",
+    summary: "Csak 3 hang",
+    level: 1,
+    meter: [4, 4],
+    modes: {
+      melody: {
+        right: ["E4 D4 C4:h", "E4 D4 C4:h", "C4:8 C4:8 C4:8 C4:8 D4:8 D4:8 D4:8 D4:8", "E4 D4 C4:h"],
+      },
+    },
+  },
+  {
+    id: "boci",
+    kids: true,
+    picture: "🐮",
+    title: "Boci, boci tarka",
+    summary: "Magyar gyerekdal",
+    level: 2,
+    meter: [2, 4],
+    modes: {
+      melody: {
+        right: [
+          "C4:8 E4:8 C4:8 E4:8", "G4 G4", "C4:8 E4:8 C4:8 E4:8", "G4 G4",
+          "C5:8 B4:8 A4:8 G4:8", "F4 A4", "G4:8 F4:8 E4:8 D4:8", "C4 C4",
+        ],
+        lyrics: [
+          "Bo- ci bo- ci", "tar- ka,", "se fü- le, se", "far- ka,",
+          "o- da me- gyünk", "lak- ni,", "a- hol te- jet", "kap- ni.",
+        ],
+      },
+    },
+  },
+  {
+    id: "lamb",
+    kids: true,
+    picture: "🐑",
+    title: "Mary Had a Little Lamb",
+    summary: "4 hang",
+    level: 3,
+    meter: [4, 4],
+    modes: {
+      melody: {
+        right: [
+          "E4 D4 C4 D4", "E4 E4 E4:h", "D4 D4 D4:h", "E4 G4 G4:h",
+          "E4 D4 C4 D4", "E4 E4 E4 E4", "D4 D4 E4 D4", "C4:w",
+        ],
+      },
+    },
+  },
+  {
+    id: "star",
+    kids: true,
+    picture: "⭐",
+    title: "Twinkle, Twinkle, Little Star",
+    summary: "6 hang",
+    level: 4,
+    meter: [4, 4],
+    modes: {
+      melody: {
+        right: [
+          "C4 C4 G4 G4", "A4 A4 G4:h", "F4 F4 E4 E4", "D4 D4 C4:h",
+          "G4 G4 F4 F4", "E4 E4 D4:h", "G4 G4 F4 F4", "E4 E4 D4:h",
+          "C4 C4 G4 G4", "A4 A4 G4:h", "F4 F4 E4 E4", "D4 D4 C4:h",
+        ],
+      },
+    },
+  },
 ];
 </script>
 
@@ -203,7 +278,7 @@ const SONGS = [
 
   function makeEvent(hand, pitch, start, dur, bar, finger, extra) {
     return Object.assign(
-      { hand, midi: pitch.midi, pitch, name: pitch.name, start, dur, bar, finger, accent: false, chord: null },
+      { hand, midi: pitch.midi, pitch, name: pitch.name, start, dur, bar, finger, accent: false, chord: null, lyric: null },
       extra
     );
   }
@@ -222,13 +297,23 @@ const SONGS = [
       const bars = def[hand];
       if (!bars) continue;
       barCount = Math.max(barCount, bars.length);
+      const lyrics = hand === "right" ? def.lyrics : null;
+      if (lyrics && lyrics.length !== bars.length) {
+        throw new Error(`${song.title}: ${lyrics.length} ütemnyi szöveg, ${bars.length} ütem dallam.`);
+      }
       bars.forEach((bar, i) => {
-        let t = 0;
-        for (const tok of splitBar(bar)) {
-          const { pitch, dur, finger } = parseToken(tok);
-          events.push(makeEvent(hand, pitch, i * bpb + t, dur, i, fingerFor(song, hand, pitch, finger)));
-          t += dur;
+        const tokens = splitBar(bar);
+        const syllables = lyrics ? splitBar(lyrics[i]) : null;
+        if (syllables && syllables.length !== tokens.length) {
+          throw new Error(`${song.title}: ${i + 1}. ütem ${syllables.length} szótag, de ${tokens.length} hang.`);
         }
+        let t = 0;
+        tokens.forEach((tok, j) => {
+          const { pitch, dur, finger } = parseToken(tok);
+          const extra = syllables ? { lyric: syllables[j] } : undefined;
+          events.push(makeEvent(hand, pitch, i * bpb + t, dur, i, fingerFor(song, hand, pitch, finger), extra));
+          t += dur;
+        });
         assertBarLength(song, `${handHu(hand)} kéz`, i, t, bpb);
       });
     }
@@ -340,6 +425,17 @@ const SONGS = [
     return { low, high };
   }
 
+  /** Gyerek billentyűzet: legalább C4–C5 (egy oktáv), fehér billentyűn végződik. */
+  function kidsRange(song) {
+    let low = 60, high = 72;
+    for (const e of buildTimeline(song, { mode: "melody", hands: "right" }).events) {
+      low = Math.min(low, e.midi - pc(e.midi));
+      high = Math.max(high, e.midi);
+    }
+    if (isBlack(high)) high += 1;
+    return { low, high };
+  }
+
   function songBarCount(song) {
     return Math.max(...availableModes(song).map((mode) => buildTimeline(song, { mode }).barCount));
   }
@@ -350,6 +446,7 @@ const SONGS = [
     if (!song.id || !song.title) errors.push("Hiányzó id vagy cím.");
     if (!Array.isArray(song.meter) || song.meter.length !== 2) errors.push(`${song.title}: hibás ütemmutató.`);
     if (!song.modes || availableModes(song).length === 0) errors.push(`${song.title}: nincs mód megadva.`);
+    else if (song.kids && !song.modes.melody) errors.push(`${song.title}: gyerekdalhoz dallam kell.`);
     if (errors.length) return errors;
     for (const mode of availableModes(song)) {
       for (const arpeggio of hasArpeggio(song, mode) ? [false, true] : [false]) {
@@ -475,7 +572,7 @@ const SONGS = [
   global.PianoCore = Object.freeze({
     HANDS, MODE_LABELS, HAND_LABELS,
     parsePitch, parseDuration, parseToken, isBlack, keyName, beatsPerBar,
-    buildTimeline, keyboardRange, songBarCount, validateSong, availableModes, hasArpeggio, requiredMidis,
+    buildTimeline, keyboardRange, kidsRange, songBarCount, validateSong, availableModes, hasArpeggio, requiredMidis,
     sessionInit, sessionReduce, numberAdjective, suggestNext,
   });
 })(typeof window !== "undefined" ? window : globalThis);
@@ -502,6 +599,10 @@ const SONGS = [
   --black-key: #22252c;
   --shadow: 0 1px 2px rgba(30, 30, 40, 0.06), 0 4px 14px rgba(30, 30, 40, 0.07);
   --radius: 16px;
+  /* Gyerek mód: hangonkénti színek (Boomwhacker-szerű), mindkét témában ugyanazok */
+  --kc-0: #e53935; --kc-2: #fb8c00; --kc-4: #fbc02d; --kc-5: #43a047;
+  --kc-7: #00a5bd; --kc-9: #8e44ad; --kc-11: #e0367f;
+  --star: #f5a623;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
 }
@@ -776,6 +877,101 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
 }
 .toast.hide { opacity: 0; transform: translate(-50%, -8px); }
 
+/* ---------- Gyerekdalok: kezdőlap ---------- */
+.kids-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.kid-card {
+  border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px; text-align: left; display: flex; flex-direction: column; gap: 8px; min-height: 150px;
+}
+.kid-card:active { transform: scale(0.98); }
+.kid-card .pic {
+  width: 60px; height: 60px; border-radius: 18px; background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center; font-size: 36px; line-height: 1;
+}
+.kid-card h3 { margin: 0; font-size: 16px; line-height: 1.25; }
+.kid-card p { margin: 0; color: var(--muted); font-size: 13px; }
+.kid-card .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; }
+.note-dots { display: flex; gap: 4px; }
+.note-dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--kc); display: block; }
+.kid-stars { color: var(--star); font-weight: 800; font-size: 14px; white-space: nowrap; }
+
+/* ---------- Gyerekdalok: játék képernyő ---------- */
+.kids-top { display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex: none; }
+.kid-btn {
+  width: 56px; height: 56px; border-radius: 18px; border: 0; background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; flex: none;
+}
+.kid-btn svg { width: 28px; height: 28px; }
+.kid-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.kid-btn:active { transform: scale(0.95); }
+.kids-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 800; }
+.kids-title .pic { font-size: 30px; line-height: 1; flex: none; }
+.kids-title .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kids-progress { height: 10px; margin: 0 16px; border-radius: 5px; background: var(--surface-2); overflow: hidden; flex: none; }
+.kids-progress span {
+  display: block; height: 100%; width: 0; border-radius: 5px; transition: width .3s;
+  background: linear-gradient(90deg, var(--kc-0), var(--kc-2), var(--kc-4), var(--kc-5), var(--kc-7), var(--kc-9));
+}
+.bubbles { flex: 30 1 0; min-height: 120px; display: flex; align-items: center; gap: 14px; padding: 8px 20px; overflow: hidden; }
+.bubble { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: .7; }
+.bubble i {
+  display: flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 50%;
+  background: var(--kc); color: #fff; font-style: normal; font-weight: 800; font-size: 22px;
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.16);
+}
+.bubble i.light-ink { color: #3d2c00; }
+.bubble b { font-size: 16px; font-weight: 700; min-height: 1.3em; }
+.bubble.cur { opacity: 1; }
+.bubble.cur i { width: min(28vw, 128px); height: min(28vw, 128px); font-size: 46px; animation: bob 1.3s ease-in-out infinite; }
+.bubble.cur b { font-size: 24px; }
+.bubble.cur.pop i { animation: pop .35s ease-out, bob 1.3s .35s ease-in-out infinite; }
+.bubble.wiggle i { animation: wiggle .45s; }
+.kids-keys-wrap { flex: 55 1 0; min-height: 170px; padding: 0 8px calc(8px + env(safe-area-inset-bottom)); display: flex; }
+.kids-keys .key.w::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 36%;
+  background: var(--kc); opacity: .32; border-radius: 0 0 7px 7px; pointer-events: none;
+}
+.kids-keys .key.w { padding-bottom: 12px; }
+.kids-keys .key.w .kl { position: relative; z-index: 1; font-size: 22px; }
+.kids-keys .key.kt { background: var(--kc); color: #fff; animation: glow 1.1s ease-in-out infinite; }
+.kids-keys .key.kt.light-ink { color: #3d2c00; }
+.kids-keys .key.kt::after { opacity: 0; }
+.kids-keys .key.kt::before {
+  content: "★"; position: absolute; top: 62%; left: 0; right: 0; text-align: center; font-size: 30px; color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.kids-keys .key.wiggle { animation: wiggle .45s; }
+.kids-keys .key.down { filter: brightness(0.88); }
+.spark {
+  position: absolute; left: 50%; top: 58%; z-index: 3; pointer-events: none; font-size: 30px; color: var(--star);
+  transform: translateX(-50%); animation: spark .7s ease-out forwards; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.kids-done {
+  position: absolute; inset: 0; z-index: 5; background: var(--bg); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px; text-align: center; padding: 24px;
+}
+.kids-done .stars { display: flex; gap: 10px; font-size: 64px; line-height: 1; color: var(--star); }
+.kids-done .stars span { display: inline-block; animation: star-in .6s both; }
+.kids-done .stars span:nth-child(2) { animation-delay: .15s; font-size: 84px; margin-top: -14px; }
+.kids-done .stars span:nth-child(3) { animation-delay: .3s; }
+.kids-done h2 { font-size: 38px; margin: 0; }
+.kids-done .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.kids-done .btn { min-height: 64px; font-size: 20px; padding: 0 28px; border-radius: 20px; }
+@keyframes bob { 50% { transform: translateY(-8px); } }
+@keyframes pop { from { transform: scale(0.6); } 70% { transform: scale(1.08); } }
+@keyframes wiggle { 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+@keyframes glow { 50% { filter: brightness(1.15) saturate(1.15); } }
+@keyframes spark { to { transform: translate(-50%, -90px) scale(1.4); opacity: 0; } }
+@keyframes star-in { from { transform: scale(0) rotate(-90deg); opacity: 0; } 70% { transform: scale(1.2) rotate(10deg); } }
+@media (orientation: landscape) and (max-height: 540px) {
+  .kids-top { padding: 4px 12px; }
+  .kid-btn { width: 48px; height: 48px; }
+  .bubbles { flex: 32 1 0; min-height: 96px; padding: 4px 20px; }
+  .bubble.cur i { width: 76px; height: 76px; font-size: 34px; }
+  .bubble.cur b { font-size: 18px; }
+  .bubble i { width: 44px; height: 44px; font-size: 18px; }
+}
+
 /* ---------- Kotta (SVG) ---------- */
 .sc-line { stroke: var(--ink); stroke-width: 1; opacity: .55; }
 .sc-bar { stroke: var(--ink); stroke-width: 1.2; opacity: .7; }
@@ -800,7 +996,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
 .sc-band { animation: pulse-band 1.6s ease-in-out infinite; }
 @keyframes pulse-band { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) {
-  .key.tgt-r, .key.tgt-l, .sc-band { animation: none; }
+  .key.tgt-r, .key.tgt-l, .sc-band, .bubble i, .kids-keys .key.kt { animation: none !important; }
 }
 </style>
 </head>
@@ -827,6 +1023,39 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
           <p style="margin:0;color:var(--muted)">Ez a nézet nem futtat JavaScriptet (pl. fájlelőnézet). Nyisd meg a fájlt böngészőben (Safari, Chrome), majd „Hozzáadás a kezdőképernyőhöz”.</p>
           <p id="bootError" style="margin:8px 0 0;color:var(--bad);font-size:13px" hidden></p>
         </div>
+      </div>
+      <div id="kidsSection" hidden>
+        <div class="section-title">Gyerekdalok</div>
+        <div class="kids-grid" id="kidsList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Gyerekdal képernyő (4 éveseknek: színek, nincs kotta) -->
+  <section id="kids" class="screen" hidden aria-label="Gyerekdal">
+    <header class="kids-top">
+      <button class="kid-btn" id="kidsBack" aria-label="Vissza a kezdőlapra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="kids-title"><span class="pic" id="kidsPic" aria-hidden="true"></span><span class="name" id="kidsTitle"></span></div>
+      <button class="kid-btn" id="kidsListen" aria-pressed="false" aria-label="Hallgasd meg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+      </button>
+      <button class="kid-btn" id="kidsRestart" aria-label="Újra az elejéről">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>
+      </button>
+    </header>
+    <div class="kids-progress" aria-hidden="true"><span id="kidsBar"></span></div>
+    <div class="bubbles" id="bubbles" aria-live="polite"></div>
+    <div class="kids-keys-wrap">
+      <div class="keys kids-keys" id="kidsKeys" role="group" aria-label="Zongorabillentyűzet"></div>
+    </div>
+    <div class="kids-done" id="kidsDone" hidden>
+      <div class="stars" aria-hidden="true"><span>★</span><span>★</span><span>★</span></div>
+      <h2>Ügyes vagy!</h2>
+      <div class="actions">
+        <button class="btn primary" id="kidsAgain">Még egyszer</button>
+        <button class="btn" id="kidsOther">Másik dal</button>
       </div>
     </div>
   </section>
@@ -900,7 +1129,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
 (function () {
   "use strict";
   const {
-    MODE_LABELS, HAND_LABELS, parsePitch, isBlack, keyName, buildTimeline, keyboardRange, songBarCount,
+    MODE_LABELS, HAND_LABELS, parsePitch, isBlack, keyName, buildTimeline, keyboardRange, kidsRange, songBarCount,
     validateSong, availableModes, hasArpeggio, requiredMidis, sessionInit, sessionReduce, suggestNext,
   } = window.PianoCore;
 
@@ -1213,7 +1442,9 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
     errors.forEach((e) => console.error("[dal]", e));
     return errors.length === 0;
   }).sort((a, b) => a.level - b.level);
-  const barTotals = Object.fromEntries(validSongs.map((s) => [s.id, songBarCount(s)]));
+  const mainSongs = validSongs.filter((s) => !s.kids);
+  const kidSongs = validSongs.filter((s) => s.kids);
+  const barTotals = Object.fromEntries(mainSongs.map((s) => [s.id, songBarCount(s)]));
 
   const viewStepIndex = () => (Player.demoActive && state.demoStep >= 0 ? state.demoStep : state.session.stepIndex);
   const currentStep = () => state.timeline && state.timeline.steps[viewStepIndex()];
@@ -1243,7 +1474,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
         <p>${msg}</p>
       </div>`;
 
-    $("#songList").innerHTML = validSongs.map((song, i) => {
+    $("#songList").innerHTML = mainSongs.map((song, i) => {
       const done = Progress.bars(song.id).length;
       const total = barTotals[song.id];
       const pct = Math.round((done / total) * 100);
@@ -1266,18 +1497,25 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
           </div>
         </article>`;
     }).join("");
+    renderKidsList();
   }
 
   function showScreen(name) {
     state.screen = name;
     $("#toast").classList.add("hide");
-    $("#home").hidden = name !== "home";
-    $("#practice").hidden = name !== "practice";
+    for (const id of ["home", "practice", "kids"]) $("#" + id).hidden = id !== name;
+    Player.stop();
+    state.demoStep = -1;
+    kids.demoStep = -1;
     if (name === "home") {
-      Player.stop();
-      state.demoStep = -1;
       renderHome();
+    } else if (name === "kids") {
+      settings.metronome = false;
+      Player.setTempo(KIDS_TEMPO);
+      renderKidsKeyboard();
+      renderKids(false);
     } else {
+      Player.setTempo(settings.tempo);
       renderKeyboard();
       renderPractice();
     }
@@ -1285,7 +1523,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
 
   /* ================= Dal / mód / kéz ================= */
   function openSong(id) {
-    const song = validSongs.find((s) => s.id === id) || validSongs[0];
+    const song = mainSongs.find((s) => s.id === id) || mainSongs[0];
     const prefs = Store.get("songPrefs", {})[song.id] || {};
     state.song = song;
     const modes = availableModes(song);
@@ -1377,8 +1615,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
     el._flashTimer = setTimeout(() => el.classList.remove(cls), kind === "ok" ? 260 : 420);
   }
 
-  function setupKeyInput() {
-    const keys = $("#keys");
+  function setupKeyInput(keys, onPress) {
     const release = (e) => {
       const el = e.target.closest && e.target.closest(".key");
       if (el) el.classList.remove("down");
@@ -1388,7 +1625,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
       if (!el) return;
       e.preventDefault();
       el.classList.add("down");
-      pressKey(Number(el.dataset.midi));
+      onPress(Number(el.dataset.midi));
     });
     keys.addEventListener("pointerup", release);
     keys.addEventListener("pointercancel", release);
@@ -1397,22 +1634,25 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
     keys.addEventListener("keydown", (e) => {
       if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("key")) {
         e.preventDefault();
-        pressKey(Number(e.target.dataset.midi));
+        onPress(Number(e.target.dataset.midi));
       }
     });
+  }
 
+  function setupComputerKeyboard() {
     // Számítógépes billentyűzet (fizikai helyzet szerint, QWERTZ-en is): alsó sor = C3–H3, felső sor = C4–H4.
     const LOWER = ["KeyZ", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV", "KeyG", "KeyB", "KeyH", "KeyN", "KeyJ", "KeyM"];
     const UPPER = ["KeyQ", "Digit2", "KeyW", "Digit3", "KeyE", "KeyR", "Digit5", "KeyT", "Digit6", "KeyY", "Digit7", "KeyU"];
     document.addEventListener("keydown", (e) => {
-      if (state.screen !== "practice" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (state.screen === "home" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       if ($("#overlay").hidden === false || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
       let midi = null;
       if (LOWER.includes(e.code)) midi = 48 + LOWER.indexOf(e.code);
       else if (UPPER.includes(e.code)) midi = 60 + UPPER.indexOf(e.code);
       if (midi == null) return;
       e.preventDefault();
-      pressKey(midi);
+      if (state.screen === "kids") kidsPress(midi);
+      else pressKey(midi);
     });
   }
 
@@ -1473,8 +1713,8 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
 
   function renderHeader() {
     const sel = $("#songSelect");
-    if (sel.options.length !== validSongs.length) {
-      sel.innerHTML = validSongs.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join("");
+    if (sel.options.length !== mainSongs.length) {
+      sel.innerHTML = mainSongs.map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join("");
     }
     sel.value = state.song.id;
     const modes = availableModes(state.song);
@@ -1871,6 +2111,8 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
       e.currentTarget.setAttribute("aria-pressed", String(settings.keyLabels));
       e.currentTarget.lastChild.textContent = settings.keyLabels ? "Be" : "Ki";
       $("#keys").classList.toggle("no-labels", !settings.keyLabels);
+      $("#kidsKeys").classList.toggle("no-labels", !settings.keyLabels);
+      renderKids(false);
     });
     sheet.querySelector("#setTheme").addEventListener("click", (e) => {
       const b = e.target.closest("button");
@@ -1942,10 +2184,10 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
     const tl = state.timeline;
     const total = tl.bars.filter((b) => b.steps.length).length;
     const clean = new Set(state.session.cleanBars).size;
-    const songIndex = validSongs.indexOf(state.song);
+    const songIndex = mainSongs.indexOf(state.song);
     const tip = suggestNext({
       cleanBars: clean, totalBars: total, hands: settings.hands, practice: settings.practice,
-      tempo: settings.tempo, songIndex, songCount: validSongs.length,
+      tempo: settings.tempo, songIndex, songCount: mainSongs.length,
     });
     const perfect = clean === total;
     const sheet = openSheet(`
@@ -1971,7 +2213,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
     if (action.kind === "tempo") { setTempo(action.value); restart(); }
     else if (action.kind === "practice") { settings.practice = true; saveSettings(); restart(); }
     else if (action.kind === "hands") { setHands(action.value); }
-    else if (action.kind === "song") { openSong(validSongs[action.index].id); }
+    else if (action.kind === "song") { openSong(mainSongs[action.index].id); }
     else restart();
   }
 
@@ -1994,6 +2236,190 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
       </div>`, { label: `Bevezető ${i + 1}/3`, onClose: () => Store.set("onboarded", true) });
     sheet.querySelector("#obNext").addEventListener("click", () => (last ? closeSheet() : openOnboarding(i + 1)));
     sheet.querySelector("#obSkip").addEventListener("click", () => (last ? openOnboarding(i - 1) : closeSheet()));
+  }
+
+  /* ================= Gyerekdalok ================= */
+  const KIDS_TEMPO = 92;
+  const LIGHT_INK_PCS = [4]; // sárga: sötét betű kell rá
+  const pcOf = (midi) => ((midi % 12) + 12) % 12;
+  const kidColor = (midi) => `var(--kc-${pcOf(midi)})`;
+  const kids = { song: null, timeline: null, range: { low: 60, high: 72 }, session: sessionInit(0), demoStep: -1 };
+  let kidKeyEls = new Map();
+
+  const kidStars = {
+    all: Store.get("kidStars", {}),
+    get(id) { return this.all[id] || 0; },
+    add(id) { this.all[id] = this.get(id) + 1; Store.set("kidStars", this.all); },
+  };
+
+  function renderKidsList() {
+    $("#kidsSection").hidden = kidSongs.length === 0;
+    $("#kidsList").innerHTML = kidSongs.map((song) => {
+      const tl = buildTimeline(song, { mode: "melody", hands: "right" });
+      const pcs = [...new Set(tl.events.map((e) => pcOf(e.midi)))].sort((a, b) => a - b);
+      const stars = kidStars.get(song.id);
+      return `
+        <button class="kid-card" data-kids="${esc(song.id)}" aria-label="${esc(song.title)}, ${esc(song.summary)}">
+          <span class="pic" aria-hidden="true">${esc(song.picture || "♪")}</span>
+          <h3>${esc(song.title)}</h3>
+          <p>${esc(song.summary)}</p>
+          <span class="row">
+            <span class="note-dots" aria-hidden="true">${pcs.map((m) => `<i style="--kc:${kidColor(m)}"></i>`).join("")}</span>
+            <span class="kid-stars">${stars ? `★ ${stars}` : ""}</span>
+          </span>
+        </button>`;
+    }).join("");
+  }
+
+  function openKids(id) {
+    const song = kidSongs.find((s) => s.id === id);
+    if (!song) return;
+    kids.song = song;
+    kids.timeline = buildTimeline(song, { mode: "melody", hands: "right" });
+    kids.range = kidsRange(song);
+    kids.session = sessionInit(0);
+    $("#kidsDone").hidden = true;
+    showScreen("kids");
+  }
+
+  const kidsViewIndex = () => (Player.demoActive && kids.demoStep >= 0 ? kids.demoStep : kids.session.stepIndex);
+
+  function renderKidsKeyboard() {
+    const { low, high } = kids.range;
+    const whites = [];
+    for (let m = low; m <= high; m++) if (!isBlack(m)) whites.push(m);
+    const w = 100 / whites.length;
+    const bw = w * 0.56;
+    let html = "";
+    whites.forEach((m, i) => {
+      const ink = LIGHT_INK_PCS.includes(pcOf(m)) ? " light-ink" : "";
+      html += `<button class="key w${ink}" data-midi="${m}" style="left:${i * w}%;width:${w}%;--kc:${kidColor(m)}" aria-label="${keyName(m)}"><span class="kl">${keyName(m)}</span></button>`;
+    });
+    for (let m = low; m <= high; m++) {
+      if (!isBlack(m)) continue;
+      const left = (whites.indexOf(m - 1) + 1) * w - bw / 2;
+      html += `<button class="key b" data-midi="${m}" style="left:${left}%;width:${bw}%" aria-label="${keyName(m)}"></button>`;
+    }
+    const el = $("#kidsKeys");
+    el.innerHTML = html;
+    el.classList.toggle("no-labels", !settings.keyLabels);
+    kidKeyEls = new Map([...el.querySelectorAll(".key")].map((k) => [Number(k.dataset.midi), k]));
+  }
+
+  function renderKids(advanced) {
+    if (state.screen !== "kids" || !kids.timeline) return;
+    const tl = kids.timeline;
+    const idx = kidsViewIndex();
+    const finished = kids.session.finished && !Player.demoActive;
+    $("#kidsPic").textContent = kids.song.picture || "♪";
+    $("#kidsTitle").textContent = kids.song.title;
+    $("#kidsListen").setAttribute("aria-pressed", String(Player.demoActive));
+    $("#kidsBar").style.width = `${((finished ? tl.steps.length : idx) / tl.steps.length) * 100}%`;
+
+    const upcoming = finished ? [] : tl.steps.slice(idx, idx + 6);
+    $("#bubbles").innerHTML = upcoming.map((step, i) => {
+      const n = step.notes[0];
+      const ink = LIGHT_INK_PCS.includes(pcOf(n.midi)) ? "light-ink" : "";
+      const cls = i === 0 ? `bubble cur${advanced ? " pop" : ""}` : "bubble";
+      return `<div class="${cls}" style="--kc:${kidColor(n.midi)}"${i === 0 ? ` aria-label="Következő: ${esc(n.name)}"` : ' aria-hidden="true"'}>
+        <i class="${ink}">${settings.keyLabels ? esc(n.name) : ""}</i><b>${n.lyric ? esc(n.lyric) : ""}</b></div>`;
+    }).join("");
+
+    const target = finished ? null : tl.steps[idx];
+    const targets = new Set(target ? target.notes.map((n) => n.midi) : []);
+    kidKeyEls.forEach((el, midi) => el.classList.toggle("kt", targets.has(midi)));
+  }
+
+  function kidsSparkle(midi) {
+    const el = kidKeyEls.get(midi);
+    if (!el) return;
+    const s = document.createElement("span");
+    s.className = "spark";
+    s.textContent = "★";
+    s.setAttribute("aria-hidden", "true");
+    el.appendChild(s);
+    setTimeout(() => s.remove(), 750);
+  }
+
+  function kidsHint() {
+    const step = kids.timeline.steps[kids.session.stepIndex];
+    const els = step.notes.map((n) => kidKeyEls.get(n.midi)).concat([$("#bubbles .bubble.cur")]);
+    els.forEach((el) => {
+      if (!el) return;
+      el.classList.remove("wiggle");
+      void el.offsetWidth;
+      el.classList.add("wiggle");
+    });
+  }
+
+  function kidsPress(midi) {
+    Sound.note(midi, null, null, 0.85);
+    state.lastInteraction = Date.now();
+    if (Player.demoActive || kids.session.finished || !kids.timeline) return;
+    const before = kids.session.stepIndex;
+    const { session, effects } = sessionReduce(kids.session, { type: "key", midi }, kids.timeline, { autoAdvance: true });
+    kids.session = session;
+    let hint = false;
+    for (const fx of effects) {
+      if (fx.type === "ok") kidsSparkle(fx.midi);
+      else if (fx.type === "wrong") hint = true;
+      else if (fx.type === "finished") setTimeout(kidsCelebrate, 450);
+    }
+    renderKids(session.stepIndex !== before);
+    if (hint) kidsHint();
+  }
+
+  function kidsCelebrate() {
+    if (state.screen !== "kids") return;
+    kidStars.add(kids.song.id);
+    const t = Sound.now() + 0.05;
+    [72, 76, 79, 84].forEach((m, i) => Sound.note(m, t + i * 0.13, i === 3 ? 0.8 : 0.2, 0.7));
+    $("#kidsDone").hidden = false;
+    renderKids(false);
+    $("#kidsAgain").focus({ preventScroll: true });
+  }
+
+  function kidsRestart() {
+    if (Player.demoActive) Player.stop();
+    kids.demoStep = -1;
+    kids.session = sessionInit(0);
+    $("#kidsDone").hidden = true;
+    renderKids(true);
+  }
+
+  function kidsToggleListen() {
+    Sound.ensure();
+    state.lastInteraction = Date.now();
+    if (Player.demoActive) {
+      Player.stop();
+      kids.demoStep = -1;
+      renderKids(false);
+      return;
+    }
+    $("#kidsDone").hidden = true;
+    kids.session = sessionInit(0);
+    kids.demoStep = 0;
+    Player.setTempo(KIDS_TEMPO);
+    Player.startDemo({ timeline: kids.timeline, fromIndex: 0, countIn: false });
+    renderKids(true);
+  }
+
+  function kidsOnDemoStep(index) {
+    kids.demoStep = index;
+    kids.timeline.steps[index].notes.forEach((n) => {
+      const el = kidKeyEls.get(n.midi);
+      if (!el) return;
+      el.classList.add("down");
+      setTimeout(() => el.classList.remove("down"), 160);
+    });
+    renderKids(true);
+  }
+
+  function kidsOnDemoEnd() {
+    Player.stop();
+    kids.demoStep = -1;
+    kids.session = sessionInit(0);
+    renderKids(true);
   }
 
   /* ================= Műveletek ================= */
@@ -2052,6 +2478,8 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
     document.addEventListener("click", (e) => {
       const open = e.target.closest("[data-open]");
       if (open) { Sound.ensure(); openSong(open.dataset.open); return; }
+      const kidOpen = e.target.closest("[data-kids]");
+      if (kidOpen) { Sound.ensure(); openKids(kidOpen.dataset.kids); return; }
       if (e.target.closest("[data-close]")) closeSheet();
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
@@ -2059,6 +2487,11 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
     $("#homeHelp").addEventListener("click", openHelp);
     $("#helpBtn").addEventListener("click", openHelp);
     $("#backBtn").addEventListener("click", () => showScreen("home"));
+    $("#kidsBack").addEventListener("click", () => showScreen("home"));
+    $("#kidsOther").addEventListener("click", () => showScreen("home"));
+    $("#kidsListen").addEventListener("click", kidsToggleListen);
+    $("#kidsRestart").addEventListener("click", kidsRestart);
+    $("#kidsAgain").addEventListener("click", kidsRestart);
     $("#songSelect").addEventListener("change", (e) => openSong(e.target.value));
     $("#modeSeg").addEventListener("click", (e) => {
       const b = e.target.closest("button");
@@ -2111,6 +2544,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
 
     document.addEventListener("visibilitychange", () => {
       if (document.hidden && Player.running) {
+        if (state.screen === "kids") { Player.stop(); kids.demoStep = -1; renderKids(false); return; }
         if (Player.demoActive) togglePlay();
         settings.metronome = false;
         Player.stop();
@@ -2120,7 +2554,7 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
 
     // Napi gyakorlási idő: csak aktív használat számít.
     setInterval(() => {
-      if (state.screen === "practice" && !document.hidden && (Player.running || Date.now() - state.lastInteraction < 30000)) {
+      if (state.screen !== "home" && !document.hidden && (Player.running || Date.now() - state.lastInteraction < 30000)) {
         PracticeLog.add(5);
       }
     }, 5000);
@@ -2130,11 +2564,15 @@ input[type="range"] { width: 100%; height: 44px; accent-color: var(--accent); ma
   applyTheme();
   settings.metronome = false; // a metronóm sosem indul magától
   Player.init({
-    beatsPerBar: () => (state.timeline ? state.timeline.bpb : 4),
-    onBeat, onDemoStep, onDemoEnd,
+    beatsPerBar: () => (state.screen === "kids" && kids.timeline ? kids.timeline.bpb : state.timeline ? state.timeline.bpb : 4),
+    onBeat: (beat, countIn) => { if (state.screen === "practice") onBeat(beat, countIn); },
+    onDemoStep: (index) => (state.screen === "kids" ? kidsOnDemoStep(index) : onDemoStep(index)),
+    onDemoEnd: () => (state.screen === "kids" ? kidsOnDemoEnd() : onDemoEnd()),
   });
   Player.setTempo(settings.tempo);
-  setupKeyInput();
+  setupKeyInput($("#keys"), pressKey);
+  setupKeyInput($("#kidsKeys"), kidsPress);
+  setupComputerKeyboard();
   bindEvents();
   showScreen("home");
   if (!Store.get("onboarded", false)) openOnboarding();
